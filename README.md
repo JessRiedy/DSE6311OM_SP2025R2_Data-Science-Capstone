@@ -2,7 +2,7 @@
 Repository for Spring 2025 Data Science Capstone at Merrimack College
 By Collins Njagi, Jessica Riedy, and Eddy Rospide
 
-# Forecasting Mental Health Service Utilization: A Google Trends-Based Approach for State-Level Prediction
+# Predicting Mental Health Service Utilization: A Google Trends-Based Approach for State-Level Prediction
 Can Google Trends data be used to accurately Predict the overall utilization rate
 of mental health services at the state level for the upcoming year?
 
