@@ -1,0 +1,99 @@
+---
+title: "EDA Report"
+author: "Jessica Riedy"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+```{r libraries}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(scales)
+data <- read_excel("Data/googleTrendsMH.xlsx", sheet = "googleTrendsMH")
+```
+
+```{r table 1}
+table1 <- data %>%
+  group_by(region) %>%
+  summarise(
+    avg_outpatient_util = mean(outpatient_util, na.rm = TRUE),
+    avg_inpatient_util = mean(inpatient_util, na.rm = TRUE),
+    avg_total_util = mean(total_util, na.rm = TRUE),
+    avg_median_trend = mean(median_all_trends, na.rm = TRUE)
+  )
+print(table1)
+```
+
+```{r table 2}
+table2 <- data %>%
+  arrange(desc(total_util)) %>%
+  select(state, year, total_util, outpatient_util, inpatient_util, median_all_trends) %>%
+  head(10)
+print(table2)
+```
+
+```{r plot 1}
+ggplot(data, aes(x = median_all_trends, y = total_util)) +
+  geom_point(aes(color = year, shape = region), size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+  labs(title = "Total Mental Health Utilization vs. Search Interest",
+       x = "Median Google Search Interest (All Trends)",
+       y = "Total Per Capita Utilization",
+       color = "Year", 
+       shape = "Region")
+
+```
+
+```{r plot 2}
+ggplot(data, aes(x = year, y = total_util, color = region)) +
+  geom_line(stat = "summary", fun = "mean", size = 1.2) +
+  labs(title = "Mean Per Capita Mental Health Utilization Over Time by Region",
+       x = "Year", y = "Mean Total Utilization")
+```
+
+```{r plot 3}
+latest_year <- max(data$year, na.rm = TRUE)
+
+data_latest <- filter(data, year == latest_year)
+
+data_latest$diagnoses_total <- rowSums(data_latest[, c("anxiety_ct", "depression_ct", "adhd_ct", "bipolar_ct", "trauma_stress_ct")], na.rm = TRUE)
+
+top_diagnosis_states <- data_latest %>%
+  arrange(desc(diagnoses_total)) %>%
+  head(10)
+
+ggplot(top_diagnosis_states, aes(x = reorder(state, diagnoses_total), y = diagnoses_total)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = paste("Top 10 States by Total Mental Health Diagnoses in", latest_year),
+       x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
+  scale_y_continuous(labels = label_comma())
+```
+
+```{r plot 4}
+summary_by_year <- data %>%
+  group_by(year) %>%
+  summarise(
+    mean_total_util = mean(total_util, na.rm = TRUE),
+    mean_search_interest = mean(mean_all_trends, na.rm = TRUE)
+  )
+
+ggplot(summary_by_year, aes(x = year)) +
+  geom_line(aes(y = mean_total_util, color = "Total Utilization"), size = 1.2) +
+  geom_line(aes(y = mean_search_interest / 100, color = "Search Interest"), size = 1.2, linetype = "dashed") +
+  scale_y_continuous(
+    name = "Mean Total Utilization (Per Capita)",
+    sec.axis = sec_axis(~ . * 100, name = "Mean Google Search Interest (0-100 Scale)")
+  ) +
+  scale_color_manual(values = c("Total Utilization" = "steelblue", "Search Interest" = "darkred")) +
+  labs(
+    title = "Mean Mental Health Utilization vs. Search Interest Over Time",
+    x = "Year",
+    color = "Metric"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y.left = element_text(color = "steelblue"),
+    axis.title.y.right = element_text(color = "darkred"),
+    legend.position = "top")
+```
