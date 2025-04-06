@@ -9,6 +9,7 @@ library(readxl)
 library(dplyr)
 library(ggplot2)
 library(scales)
+library(corrplot)
 data <- read_excel("Data/googleTrendsMH.xlsx", sheet = "googleTrendsMH")
 ```
 
@@ -96,4 +97,27 @@ ggplot(summary_by_year, aes(x = year)) +
     axis.title.y.left = element_text(color = "steelblue"),
     axis.title.y.right = element_text(color = "darkred"),
     legend.position = "top")
+```
+```{r correlation matrix}
+library(corrplot)
+
+data_cor <- data %>%
+  select(median_adhd, median_ptsd, median_anxiety, median_bipolar, median_depression, state_psych_care, private_psych_care, resid_psych_care)
+
+data_cor_scale <- scale(data_cor)
+
+data_cor_matrx_scaled <- cor(data_cor_scale)
+
+print(data_cor_matrx_scaled)
+
+```
+```{r plot 5}
+
+corrplot(data_cor_matrx_scaled, method = "color",
+         type = "upper",
+         order = "hclust",
+         tl.cex = 0.7,
+         tl.col = "black",
+         main = "Correlation matrix")
+
 ```
