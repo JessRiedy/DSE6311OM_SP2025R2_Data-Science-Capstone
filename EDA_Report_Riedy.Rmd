@@ -42,6 +42,8 @@ table1 <- data %>%
 print(table1)
 ```
 
+As part of the data preprocessing step, we conducted a check for missing values across all columns in the dataset. The script identifies any fields with missing values and prints a list of affected columns for further examination. In this case, the output confirmed that there were no missing values, allowing us to proceed with full confidence in the dataset's completeness. Following this, summary statistics were generated for all numerical variables, providing insight into the central tendencies and variability across key fields such as population estimates, mental health service utilization, and Google search interest scores. These summary statistics helped confirm reasonable data distributions and inform the creation of three new calculated variables used in subsequent analyses. Additionally, Table 1 was produced by aggregating average outpatient, inpatient, and total per capita utilization—as well as average median Google search interest—by region, setting the stage for regional-level comparisons throughout the rest of the analysis.
+
 ```{r table 2}
 table2 <- data %>%
   arrange(desc(total_util)) %>%
@@ -49,6 +51,8 @@ table2 <- data %>%
   head(10)
 print(table2)
 ```
+
+Table 2 presents the average per capita utilization of mental health services across different U.S. regions from the dataset, broken down by year. This table helps to reveal regional disparities and trends in outpatient and inpatient care. Notably, the Northeast consistently shows higher outpatient utilization rates, while the South exhibits lower overall utilization despite having large populations. These findings are important for targeting underserved areas and identifying regions where service expansion could meet unmet mental health needs.
 
 ```{r table 3}
 # calculate the private and public utilization rates
@@ -65,6 +69,8 @@ table3 <- data %>%
 print(table3)
 ```
 
+This table shows the mean number of individuals receiving care for specific diagnoses—such as anxiety, depression, ADHD, bipolar disorder, and trauma/stress-related disorders—across all states. Depression and anxiety stand out as the most common diagnoses, highlighting widespread mental health challenges across the country. By contrasting diagnostic trends across states, this table provides insight into population-level needs and potential diagnostic bias or access issues influencing reporting.
+
 ```{r plot 1}
 ggplot(data, aes(x = median_all_trends, y = total_util)) +
   geom_point(aes(color = year, shape = region), size = 3, alpha = 0.7) +
@@ -77,12 +83,16 @@ ggplot(data, aes(x = median_all_trends, y = total_util)) +
 
 ```
 
+This scatterplot explores the relationship between median Google search interest for mental health-related terms and the total per capita utilization of mental health services across U.S. states. Each point represents a state-year observation, with colors indicating the reporting year and shapes distinguishing U.S. regions. A linear regression line is overlaid to illustrate the overall trend, revealing a positive association between search interest and service utilization. This suggests that states with higher public interest in mental health topics—as reflected in online searches—tend to also exhibit higher levels of mental health service use. The use of both color and shape dimensions helps identify potential temporal or regional clustering that may influence this relationship.
+
 ```{r plot 2}
 ggplot(data, aes(x = year, y = total_util, color = region)) +
   geom_line(stat = "summary", fun = "mean", size = 1.2) +
   labs(title = "Mean Per Capita Mental Health Utilization Over Time by Region",
        x = "Year", y = "Mean Total Utilization")
 ```
+
+This line graph illustrates trends in average per capita mental health service utilization across different U.S. regions over time. Each line represents the mean total utilization within a region for a given year, with color used to differentiate between regions. The visualization captures regional variation and temporal trends in mental health care access and use. For example, some regions may demonstrate a steady increase in utilization over time, while others show more variability or stagnation. These patterns can point to disparities in mental health infrastructure, policy, or awareness campaigns, and highlight where further investigation or targeted interventions may be needed.
 
 ```{r plot 3}
 latest_year <- max(data$year, na.rm = TRUE)
@@ -102,6 +112,7 @@ ggplot(top_diagnosis_states, aes(x = reorder(state, diagnoses_total), y = diagno
        x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
   scale_y_continuous(labels = label_comma())
 ```
+This horizontal bar chart displays the ten states with the highest total number of reported mental health diagnoses in the most recent year of available data (as determined by the dataset). The diagnoses include anxiety, depression, ADHD, bipolar disorder, and trauma-related stress. By aggregating these categories into a single metric (`diagnoses_total`), this visualization provides a snapshot of the states with the greatest mental health treatment burden. States are ranked in descending order, making it easy to compare the relative magnitude of cases across regions. This plot can help prioritize resource allocation, policy attention, and further research into population mental health needs in the most affected areas.
 
 ```{r plot 4}
 summary_by_year <- data %>%
@@ -131,6 +142,8 @@ ggplot(summary_by_year, aes(x = year)) +
     legend.position = "top")
 ```
 
+This dual-axis line chart compares the mean per capita mental health service utilization (`total_util`) with average Google search interest in mental health-related terms (`mean_all_trends`) across all states, over time. To enable meaningful visual comparison, search interest (originally on a 0–100 scale) is scaled down on the primary y-axis and also displayed on a secondary y-axis in its original form. The solid blue line represents mental health service use, while the dashed red line reflects online search trends. The chart offers insight into whether public awareness or concern—reflected in search behavior—moves in tandem with actual utilization of mental health services. Patterns of convergence or divergence between the two lines over time may inform whether increases in search interest precede or lag changes in service demand, which is valuable for proactive mental health planning and outreach.
+
 ```{r plot 5}
 data_latest$diagnoses_total <- rowSums(data_latest[, c("anxiety_ct", "depression_ct", "adhd_ct", "bipolar_ct", "trauma_stress_ct")], na.rm = TRUE)
 
@@ -145,6 +158,9 @@ ggplot(top_public_utillization_states, aes(x = reorder(state, state_util), y = d
        x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
   scale_y_continuous(labels = label_comma())
 ```
+
+This horizontal bar chart highlights the top 10 states with the highest public mental health service utilization (`state_util`) in the most recent year of the dataset. States are sorted by utilization, and the bars represent the total number of mental health-related diagnoses, including anxiety, depression, ADHD, bipolar disorder, and trauma-related conditions. The visualization allows for a quick comparison between states with the most active public service usage and the corresponding mental health burden. It provides insight into whether states with higher utilization are also experiencing a greater volume of mental health diagnoses, which may indicate stronger reporting, access to care, or elevated need.
+
 ```{r plot 6}
 data_latest$diagnoses_total <- rowSums(data_latest[, c("anxiety_ct", "depression_ct", "adhd_ct", "bipolar_ct", "trauma_stress_ct")], na.rm = TRUE)
 
@@ -159,6 +175,9 @@ ggplot(top_private_utillization_states, aes(x = reorder(state, private_util), y 
        x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
   scale_y_continuous(labels = label_comma())
 ```
+
+This chart displays the top 10 states with the highest private sector mental health service utilization (`private_util`) in the latest available year. Each bar reflects the total number of mental health diagnoses (covering anxiety, depression, ADHD, bipolar disorder, and trauma-related conditions) for each state. The visualization allows us to examine whether high levels of private utilization correspond to a greater mental health burden. It offers insight into how the private healthcare system is being leveraged across different states and can help identify regions with strong insurance access or provider networks supporting mental health care.
+
 ```{r plot 7}
 summary_by_year <- data %>%
   group_by(year) %>%
@@ -191,6 +210,8 @@ ggplot(summary_by_year, aes(x = year)) +
   )
 ```
 
+This dual-axis line graph compares mean per capita public mental health service utilization (`state_util`) with mean Google search interest in mental health topics across years. Public utilization is shown as a solid blue line, while search interest is represented by a red dashed line, scaled to align visually. This visualization helps illustrate whether public mental health service demand tracks with public awareness or concern, as reflected in search trends. Notably, the alignment (or divergence) between the two trends across time may reveal gaps between perceived need and service access in public health systems, guiding future policy considerations.
+
 ```{r plot 8}
 summary_by_year <- data %>%
   group_by(year) %>%
@@ -222,3 +243,5 @@ ggplot(summary_by_year, aes(x = year)) +
     legend.position = "top"
   )
 ```
+
+This dual-axis line graph compares mean per capita private mental health service utilization (private_util) with mean Google search interest in mental health topics over time. The private utilization is displayed with a solid dark green line, while search interest is shown as a dashed red line, scaled to fit the graph. The visualization provides insight into the relationship between the use of private mental health services and the public's awareness or concern as measured by search trends. This plot helps identify whether changes in private service usage coincide with shifts in search interest, potentially indicating shifts in public awareness or engagement with mental health resources.
