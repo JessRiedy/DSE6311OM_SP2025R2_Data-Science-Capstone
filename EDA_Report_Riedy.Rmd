@@ -4,14 +4,32 @@ author: "Jessica Riedy"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
+
 ```{r libraries}
 library(readxl)
 library(dplyr)
 library(ggplot2)
 library(scales)
+
 data <- read_excel("Data/googleTrendsMH.xlsx", sheet = "googleTrendsMH")
 ```
 
+```{r examine_data_structure}
+# Check for columns with  missing values
+na_counts <- colSums(is.na(data))
+na_columns <- na_counts[na_counts > 0]
+
+if (any(na_counts > 0)){
+  paste("List of columns with missing values for examination")
+  print(names(na_columns))
+} else {
+  print("There are zero columns with null values.")
+}
+
+# Show summary statistics for numeric columns
+numeric_cols <- select_if(data, is.numeric)
+summary(numeric_cols)
+```
 ```{r table 1}
 table1 <- data %>%
   group_by(region) %>%
@@ -30,6 +48,21 @@ table2 <- data %>%
   select(state, year, total_util, outpatient_util, inpatient_util, median_all_trends) %>%
   head(10)
 print(table2)
+```
+
+```{r table 3}
+# calculate the private and public utilization rates
+data <- data %>%
+  mutate(state_util = (state_psych_care/population_est),
+         private_util = (private_psych_care/population_est),
+         diff_util = (total_util-(state_util + private_util))
+  )
+
+table3 <- data %>%
+  arrange(desc(total_util)) %>%
+  select(state, year, total_util, state_util, private_util, diff_util) %>%
+  head(10)
+print(table3)
 ```
 
 ```{r plot 1}
@@ -96,4 +129,96 @@ ggplot(summary_by_year, aes(x = year)) +
     axis.title.y.left = element_text(color = "steelblue"),
     axis.title.y.right = element_text(color = "darkred"),
     legend.position = "top")
+```
+
+```{r plot 5}
+data_latest$diagnoses_total <- rowSums(data_latest[, c("anxiety_ct", "depression_ct", "adhd_ct", "bipolar_ct", "trauma_stress_ct")], na.rm = TRUE)
+
+top_public_utillization_states <- data_latest %>%
+  arrange(desc(state_util)) %>%
+  head(10)
+
+ggplot(top_public_utillization_states, aes(x = reorder(state, state_util), y = diagnoses_total)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = paste("Top 10 States by Public Utilizaion in", latest_year),
+       x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
+  scale_y_continuous(labels = label_comma())
+```
+```{r plot 6}
+data_latest$diagnoses_total <- rowSums(data_latest[, c("anxiety_ct", "depression_ct", "adhd_ct", "bipolar_ct", "trauma_stress_ct")], na.rm = TRUE)
+
+top_private_utillization_states <- data_latest %>%
+  arrange(desc(private_util)) %>%
+  head(10)
+
+ggplot(top_private_utillization_states, aes(x = reorder(state, private_util), y = diagnoses_total)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = paste("Top 10 States by Private Utilizaion in", latest_year),
+       x = "State", y = "Total Diagnoses (Anxiety, Depression, etc.)") + 
+  scale_y_continuous(labels = label_comma())
+```
+```{r plot 7}
+summary_by_year <- data %>%
+  group_by(year) %>%
+  summarise(
+    mean_state_util = mean(state_util, na.rm = TRUE),
+    mean_search_interest = mean(mean_all_trends, na.rm = TRUE)
+  )
+
+ggplot(summary_by_year, aes(x = year)) +
+  geom_line(aes(y = mean_state_util, color = "Public Utilization"), size = 1.2) +
+  geom_line(aes(y = mean_search_interest / 100, color = "Search Interest"), size = 1.2, linetype = "dashed") +
+  scale_y_continuous(
+    name = "Mean Public Utilization (Per Capita)",
+    sec.axis = sec_axis(~ . * 100, name = "Mean Google Search Interest (0-100 Scale)")
+  ) +
+  scale_color_manual(values = c(
+    "Public Utilization" = "steelblue",
+    "Search Interest" = "darkred"
+  )) +
+  labs(
+    title = "Mean Mental Health Public Utilization vs. Search Interest Over Time",
+    x = "Year",
+    color = "Metric"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y.left = element_text(color = "steelblue"),
+    axis.title.y.right = element_text(color = "darkred"),
+    legend.position = "top"
+  )
+```
+
+```{r plot 8}
+summary_by_year <- data %>%
+  group_by(year) %>%
+  summarise(
+    mean_private_util = mean(private_util, na.rm = TRUE),  
+    mean_search_interest = mean(mean_all_trends, na.rm = TRUE)
+  )
+
+ggplot(summary_by_year, aes(x = year)) +
+  geom_line(aes(y = mean_private_util, color = "Private Utilization"), size = 1.2) +
+  geom_line(aes(y = mean_search_interest / 100, color = "Search Interest"), size = 1.2, linetype = "dashed") +
+  scale_y_continuous(
+    name = "Mean Private Utilization (Per Capita)",
+    sec.axis = sec_axis(~ . * 100, name = "Mean Google Search Interest (0-100 Scale)")
+  ) +
+  scale_color_manual(values = c(
+    "Private Utilization" = "darkgreen",
+    "Search Interest" = "darkred"
+  )) +
+  labs(
+    title = "Mean Mental Health Private Utilization vs. Search Interest Over Time",
+    x = "Year",
+    color = "Metric"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y.left = element_text(color = "steelblue"),
+    axis.title.y.right = element_text(color = "darkred"),
+    legend.position = "top"
+  )
 ```
