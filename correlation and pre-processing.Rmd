@@ -1,0 +1,172 @@
+---
+title: "Pre_processing"
+author: "COLLINS M NJAGI"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r reading data}
+
+data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
+
+```
+
+```{r libraries}
+library(caret)
+library(tidyr)
+library(dplyr)
+
+```
+
+creating response variable => state_mentalhealth_utili = state_psych_care / population_est
+
+state_mentalhealth_utili <- data_GTrends$state_psych_care / data_GTrends$population_est
+
+```{r data transforming ct variables}
+
+
+data_GTrends <- data_GTrends %>%
+  mutate(state_mentalhealth_util = state_psych_care/population_est,
+         anxiety_prop = anxiety_ct/ population_est,
+         trauma_stress_prop = trauma_stress_ct/population_est,
+         adhd_prop = adhd_ct/population_est,
+         bipolar_prop = bipolar_ct/population_est,
+         depression_prop = depression_ct/population_est)
+
+data_GTrends <- data_GTrends %>% 
+  select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct)
+
+```
+
+
+```{r testing correlation}
+
+library(corrplot)
+
+correlation_matrix <- data_GTrends %>%
+  select_if(is.numeric) %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -trauma_stress_prop, -depression_prop, -inpatient_util, -contains(c("median", "total")),
+         -total_util) %>%
+  cor()
+
+print(correlation_matrix)
+
+```
+
+
+
+ high correlation variables 
+ 
+ 1. private, reside and comm_psych_care,
+ 2.inpatient_util vs outpatient_util ( i already have state_mentalhealth_util)
+ 3.mean_therapist near_me vs mean_psychiatrist and mean_psychologist
+ 4.mean_alltrend vs mean_adhd, mean_ptsd, mean_anxiety, mean_mentalhospital.
+ 5. mean_anxiety vs year, mean_adhd & ptsd
+ 6.outpatient_util vs total_util, adhd, bipolar & depression
+ 7.total_util
+ 8.depression prob vs adhd. ptsd, bipolar and trauma_stress_prop
+ 9.trauma_stress_prop vs adhd, anxiety_prop and state_mentalhealth_util
+ 10.state_mentalhealth_util vs adhd, ptsd, bipolar
+
+
+```{r correlation matrix}
+
+data_GTrends %>%
+  select_if(is.numeric) %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")),
+         -total_util) %>%
+  cor() %>%
+
+corrplot(diag = F,
+         tl.cex = 0.7,
+         tl.col = "black",
+         main = "Correlation Matrix of Curated Google Trends Dataset",
+         mar = c(1, 1, 2, 1))
+
+
+
+```
+
+
+```{r data split: train and test dataset}
+
+clean_data_GTrends <- data_GTrends %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")), -total_util)
+
+
+train <- createDataPartition(clean_data_GTrends$state_mentalhealth_util,
+                             p = 0.80,
+                             list = FALSE,
+                             times = 1)
+
+
+GTrend_training_set <- clean_data_GTrends[train, ] 
+
+
+test_set <- clean_data_GTrends[-train, ] 
+
+```
+
+
+```{r data encoding}
+
+unique(clean_data_GTrends$region)
+unique(clean_data_GTrends$state)
+is.factor(clean_data_GTrends$region) 
+is.factor(clean_data_GTrends$state)  
+
+
+GTrend_training_set$region <- factor(GTrend_training_set$region)
+
+     is.factor(GTrend_training_set$region) 
+     levels(GTrend_training_set$region)
+     class(GTrend_training_set$region)
+
+GTrend_training_set$state <- factor(GTrend_training_set$state)
+
+     class(GTrend_training_set$state) 
+     levels(GTrend_training_set$state)
+
+# encoding both region and state and adding them to training dataset
+
+onehot_encoded <- dummyVars(~region + state, GTrend_training_set[,c("region", "state")],
+                           levelsOnly = TRUE,
+                           fullRank = TRUE)
+
+  onehot_training <- predict(onehot_encoded, GTrend_training_set[,c("region", "state")])
+
+  GTrend_training_set <- cbind(GTrend_training_set, onehot_training)
+
+  GTrend_training_set_f <- GTrend_training_set %>%
+  select(-region, -state)
+
+#adding encoded state and region into test set dataset
+
+test_set$region <- factor(test_set$region)
+test_set$state <- factor(test_set$state)
+
+ onehot_test <- predict(onehot_encoded, test_set[, c("region", "state")])
+
+ test_set <- cbind(test_set, onehot_test)
+
+ test_set_f <- test_set %>%
+  select(-region, -state) #removing original region and state variables
+
+```
+
+
+
+
+```{r center and scale}
+test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
+                           center = apply(GTrend_training_set_f[, c(-10)], 2, mean),
+                           scale = apply(GTrend_training_set_f[, c(-10)], 2, sd))
+                                          
+
+GTrend_training_set_f[, -10] <- scale(GTrend_training_set_f[, -10])
+
+```
+
