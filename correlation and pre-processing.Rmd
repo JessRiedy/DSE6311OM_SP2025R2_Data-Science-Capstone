@@ -3,31 +3,89 @@ title: "Pre_processing"
 author: "COLLINS M NJAGI"
 date: "`r Sys.Date()`"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
   word_document: default
 ---
 
-```{r reading data}
 
-data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
 
-```
 
-```{r libraries}
+```{r}
+#libraries
+
+library(readxl)
 library(caret)
 library(tidyr)
 library(dplyr)
+library(corrplot)
 
 ```
 
-creating response variable => state_mentalhealth_utili = state_psych_care / population_est
 
-state_mentalhealth_utili <- data_GTrends$state_psych_care / data_GTrends$population_est
+```{r }
+#reading data
+
+data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
+
+load("ACS_for_MHGoogleTrends.Rdata")
+
+acs_data <- ACS_data
+ACS_data <- NULL
+```
+ testing GitHub
+
+```{r}
+##CORRELATION MATRIX FOR acs_data
+
+acs_correlation_matrix <- acs_data %>%
+  select_if(is.numeric) %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability) %>%
+  cor()
+
+print(acs_correlation_matrix)
+
+```
+updated code
+
+```{r}
+
+#presenting correlation matrix in graphic format
+
+acs_correlation_matrix <- acs_data %>%
+  select_if(is.numeric) %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability) %>%
+  cor() %>%
+  corrplot( diag = F,
+           tl.cex = 0.7,
+           tl.col = "black",
+           main = "acs_data correlation matrix",
+           mar = c(0,0,1,0))
+
+```
+
+```{r}
+#removing correlated features
+
+
+acs_data_clean <- acs_data %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability)
+
+
+# convert state names into abbreviation to match state in data_GTrends
+
+acs_data_clean$state <- toupper(state.abb[match(tolower(acs_data_clean$state), tolower(state.name))])
+
+
+```
 testing GitHub
 
-```{r data transforming ct variables}
 
+```{r }
+#data transformations ct variables
+#creating response variable => state_mentalhealth_utili = state_psych_care / population_est
+
+#state_mentalhealth_utili <- data_GTrends$state_psych_care / data_GTrends$population_est
 
 data_GTrends <- data_GTrends %>%
   mutate(state_mentalhealth_util = state_psych_care/population_est,
@@ -41,41 +99,50 @@ data_GTrends <- data_GTrends %>%
   select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct)
 
 ```
+  
+  
+```{r}
+#joining both datasets acs_data and data_GTrends
+
+GTrends_acs_joined <- inner_join(data_GTrends, acs_data_clean, by = c("year", "state"))
+
+```
 
 
-```{r testing correlation}
+```{r }
+#testing correlation
 
 library(corrplot)
 
-correlation_matrix <- data_GTrends %>%
+correlation_matrix <- GTrends_acs_joined %>%
   select_if(is.numeric) %>%
   select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -trauma_stress_prop, -depression_prop, -inpatient_util, -contains(c("median", "total")),
          -total_util) %>%
-  cor()
+  cor() 
 
 print(correlation_matrix)
 
 ```
 
+high correlation variables 
 
+1. private, reside and comm_psych_care,
+2.inpatient_util vs outpatient_util ( i already have state_mentalhealth_util)
+3.mean_therapist near_me vs mean_psychiatrist and mean_psychologist
+4.mean_alltrend vs mean_adhd, mean_ptsd, mean_anxiety, mean_mentalhospital.
+5. mean_anxiety vs year, mean_adhd & ptsd
+6.outpatient_util vs total_util, adhd, bipolar & depression
+7.total_util
+8.depression prob vs adhd. ptsd, bipolar and trauma_stress_prop
+9.trauma_stress_prop vs adhd, anxiety_prop and state_mentalhealth_util
+10.state_mentalhealth_util vs adhd, ptsd, bipolar
 
- high correlation variables 
  
- 1. private, reside and comm_psych_care,
- 2.inpatient_util vs outpatient_util ( i already have state_mentalhealth_util)
- 3.mean_therapist near_me vs mean_psychiatrist and mean_psychologist
- 4.mean_alltrend vs mean_adhd, mean_ptsd, mean_anxiety, mean_mentalhospital.
- 5. mean_anxiety vs year, mean_adhd & ptsd
- 6.outpatient_util vs total_util, adhd, bipolar & depression
- 7.total_util
- 8.depression prob vs adhd. ptsd, bipolar and trauma_stress_prop
- 9.trauma_stress_prop vs adhd, anxiety_prop and state_mentalhealth_util
- 10.state_mentalhealth_util vs adhd, ptsd, bipolar
 
+```{r }
+#correlation matrix
 
-```{r correlation matrix}
-
-data_GTrends %>%
+GTrends_acs_joined %>%
   select_if(is.numeric) %>%
   select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")),
          -total_util) %>%
@@ -84,45 +151,69 @@ data_GTrends %>%
 corrplot(diag = F,
          tl.cex = 0.7,
          tl.col = "black",
-         main = "Correlation Matrix of Curated Google Trends Dataset",
-         mar = c(1, 1, 2, 1))
+         main = "Correlation Matrix of GTrends_acs_joined",
+         mar = c(0, 0, 1, 0))
 
 
 
 ```
 
+```{r}
+dim(clean_GTrends_acs_joined)
+```
+```{r}
+names(clean_GTrends_acs_joined)
+```
 
-```{r data split: train and test dataset}
 
-clean_data_GTrends <- data_GTrends %>%
+
+```{r }
+#data split: train and test dataset
+
+clean_GTrends_acs_joined <- GTrends_acs_joined %>%
   select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")), -total_util)
 
+test_n <- (1/sqrt(20))*nrow(clean_GTrends_acs_joined)
+  test_prop <- round((1/sqrt(20))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
+  train_prop <- 1-test_prop
+  
+  print(paste0("the ideal split ratio is", train_prop, ":", test_prop, "training:testing"))
+  
+```
 
-train <- createDataPartition(clean_data_GTrends$state_mentalhealth_util,
-                             p = 0.80,
+
+```{r}
+
+train <- createDataPartition(clean_GTrends_acs_joined$state_mentalhealth_util,
+                             p = 0.78,
                              list = FALSE,
                              times = 1)
 
 
-GTrend_training_set <- clean_data_GTrends[train, ] 
+GTrend_training_set <- clean_GTrends_acs_joined[train, ] 
 
 
-test_set <- clean_data_GTrends[-train, ] 
-
+test_set <- clean_GTrends_acs_joined[-train, ] 
+ 
+dim(GTrend_training_set)
+```
+```{r}
+dim(test_set)
 ```
 
 
-```{r data encoding}
+```{r }
+#data encoding
 
-unique(clean_data_GTrends$region)
-unique(clean_data_GTrends$state)
-is.factor(clean_data_GTrends$region) 
-is.factor(clean_data_GTrends$state)  
+unique(clean_GTrends_acs_joined$region)
+unique(clean_GTrends_acs_joined$state)
+is.factor(clean_GTrends_acs_joined$region) #checking whether region is a factor =false
+is.factor(clean_GTrends_acs_joined$state) #checking whether region is a factor = false
 
 
-GTrend_training_set$region <- factor(GTrend_training_set$region)
+GTrend_training_set$region <- factor(GTrend_training_set$region) #convert region into a factor
 
-     is.factor(GTrend_training_set$region) 
+     is.factor(GTrend_training_set$region) #check if its a factor to confirm = True
      levels(GTrend_training_set$region)
      class(GTrend_training_set$region)
 
@@ -130,6 +221,7 @@ GTrend_training_set$state <- factor(GTrend_training_set$state)
 
      class(GTrend_training_set$state) 
      levels(GTrend_training_set$state)
+
 
 # encoding both region and state and adding them to training dataset
 
@@ -142,9 +234,10 @@ onehot_encoded <- dummyVars(~region + state, GTrend_training_set[,c("region", "s
   GTrend_training_set <- cbind(GTrend_training_set, onehot_training)
 
   GTrend_training_set_f <- GTrend_training_set %>%
-  select(-region, -state)
+  select(-region, -state) #removing the original region and state variables
 
 #adding encoded state and region into test set dataset
+
 
 test_set$region <- factor(test_set$region)
 test_set$state <- factor(test_set$state)
@@ -154,20 +247,51 @@ test_set$state <- factor(test_set$state)
  test_set <- cbind(test_set, onehot_test)
 
  test_set_f <- test_set %>%
-  select(-region, -state) #removing original region and state variables
+  select(-region, -state) 
+ 
+ dim(GTrend_training_set_f)
 
 ```
 
+```{r}
+dim(test_set_f)
+```
+
+```{r}
+head(GTrend_training_set_f[,19:26])
+```
 
 
+```{r }
+#center and scale
 
-```{r center and scale}
 test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
                            center = apply(GTrend_training_set_f[, c(-10)], 2, mean),
-                           scale = apply(GTrend_training_set_f[, c(-10)], 2, sd))
+                           scale = apply(GTrend_training_set_f[, c(-10)], 2, sd)) 
+
+#(-10) is the state_mentalhealth_util, i want to exclude it from center and scale since its already a proportion. Am not sure if this is the best idea at the moment!
                                           
 
 GTrend_training_set_f[, -10] <- scale(GTrend_training_set_f[, -10])
 
+head(GTrend_training_set_f[,19:26])
 ```
+
+```{r}
+#generating codebook
+
+library(tibble)
+
+codebook <- tibble(
+  variable = names(clean_GTrends_acs_joined),
+  class = sapply(clean_GTrends_acs_joined, class),
+  "Number of Missing Values" = sapply(clean_GTrends_acs_joined, function(x) sum(is.na(x))),
+  "Number of Unique Values" = sapply(clean_GTrends_acs_joined, function(x) length(unique(x)))
+)
+
+print(codebook)
+```
+
+
+
 
