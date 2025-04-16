@@ -24,6 +24,7 @@ library(dplyr)
 creating response variable => state_mentalhealth_utili = state_psych_care / population_est
 
 state_mentalhealth_utili <- data_GTrends$state_psych_care / data_GTrends$population_est
+testing GitHub
 
 ```{r data transforming ct variables}
 
