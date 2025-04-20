@@ -19,7 +19,8 @@ library(caret)
 library(tidyr)
 library(dplyr)
 library(corrplot)
-
+library(rvest)
+library(glmnet)
 ```
 
 
@@ -28,7 +29,9 @@ library(corrplot)
 
 data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
 
-load("ACS_for_MHGoogleTrends.Rdata")
+
+
+acs_data <- load("C:\\data_science\\DSE6311OM_\\Week4_Pre-processing and Feature Engineering\\ACS_for_MHGoogleTrends.Rdata")
 
 acs_data <- ACS_data
 ACS_data <- NULL
@@ -95,8 +98,10 @@ data_GTrends <- data_GTrends %>%
          bipolar_prop = bipolar_ct/population_est,
          depression_prop = depression_ct/population_est)
 
-data_GTrends <- data_GTrends %>% 
-  select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct)
+#data_GTrends <- data_GTrends %>% 
+  #select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct) all these feature already removed!
+
+
 
 ```
   
@@ -112,7 +117,6 @@ GTrends_acs_joined <- inner_join(data_GTrends, acs_data_clean, by = c("year", "s
 ```{r }
 #testing correlation
 
-library(corrplot)
 
 correlation_matrix <- GTrends_acs_joined %>%
   select_if(is.numeric) %>%
@@ -158,6 +162,22 @@ corrplot(diag = F,
 
 ```
 
+
+
+```{r }
+#data split: train and test dataset
+
+clean_GTrends_acs_joined <- GTrends_acs_joined %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -region, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")), -total_util) #i have added region as part of eliminated feature
+
+test_n <- (1/sqrt(19))*nrow(clean_GTrends_acs_joined)
+  test_prop <- round((1/sqrt(19))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
+  train_prop <- 1-test_prop
+  
+  print(paste0("the ideal split ratio is", train_prop, ":", test_prop, "training:testing"))
+  
+```
+
 ```{r}
 dim(clean_GTrends_acs_joined)
 ```
@@ -167,25 +187,10 @@ names(clean_GTrends_acs_joined)
 
 
 
-```{r }
-#data split: train and test dataset
-
-clean_GTrends_acs_joined <- GTrends_acs_joined %>%
-  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")), -total_util)
-
-test_n <- (1/sqrt(20))*nrow(clean_GTrends_acs_joined)
-  test_prop <- round((1/sqrt(20))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
-  train_prop <- 1-test_prop
-  
-  print(paste0("the ideal split ratio is", train_prop, ":", test_prop, "training:testing"))
-  
-```
-
-
 ```{r}
 
 train <- createDataPartition(clean_GTrends_acs_joined$state_mentalhealth_util,
-                             p = 0.78,
+                             p = 0.77,
                              list = FALSE,
                              times = 1)
 
@@ -196,70 +201,67 @@ GTrend_training_set <- clean_GTrends_acs_joined[train, ]
 test_set <- clean_GTrends_acs_joined[-train, ] 
  
 dim(GTrend_training_set)
+
 ```
+
+
 ```{r}
 dim(test_set)
+
 ```
 
+ TARGET ENCODING OF STATE BY Njagi
+ 
+```{r}
 
-```{r }
-#data encoding
-
-unique(clean_GTrends_acs_joined$region)
 unique(clean_GTrends_acs_joined$state)
-is.factor(clean_GTrends_acs_joined$region) #checking whether region is a factor =false
 is.factor(clean_GTrends_acs_joined$state) #checking whether region is a factor = false
-
-
-GTrend_training_set$region <- factor(GTrend_training_set$region) #convert region into a factor
-
-     is.factor(GTrend_training_set$region) #check if its a factor to confirm = True
-     levels(GTrend_training_set$region)
-     class(GTrend_training_set$region)
 
 GTrend_training_set$state <- factor(GTrend_training_set$state)
 
      class(GTrend_training_set$state) 
      levels(GTrend_training_set$state)
+     
+     
+# we are going to apply target encoding (state_mentalhealth_util). To avoid overfitting we are going to introduce a
+#smoothed version of target encoding
 
+main_mean <- mean( GTrend_training_set$state_mentalhealth_util)
 
-# encoding both region and state and adding them to training dataset
-
-onehot_encoded <- dummyVars(~region + state, GTrend_training_set[,c("region", "state")],
-                           levelsOnly = TRUE,
-                           fullRank = TRUE)
-
-  onehot_training <- predict(onehot_encoded, GTrend_training_set[,c("region", "state")])
-
-  GTrend_training_set <- cbind(GTrend_training_set, onehot_training)
-
-  GTrend_training_set_f <- GTrend_training_set %>%
-  select(-region, -state) #removing the original region and state variables
-
-#adding encoded state and region into test set dataset
-
-
-test_set$region <- factor(test_set$region)
-test_set$state <- factor(test_set$state)
-
- onehot_test <- predict(onehot_encoded, test_set[, c("region", "state")])
-
- test_set <- cbind(test_set, onehot_test)
-
- test_set_f <- test_set %>%
-  select(-region, -state) 
- 
- dim(GTrend_training_set_f)
-
+  smoothing_factor <- 10
+   
+  
+  #calculating the smoothed state means from the training set
+   state_encoded_by_smoothedmean <- GTrend_training_set %>%
+     group_by(state) %>%
+     summarise(state_encoded = (mean(state_mentalhealth_util) * n() + main_mean * smoothing_factor) / (n() + smoothing_factor))
+   
+   #merging the smoothed encoded state means with the training set
+          
+         GTrend_training_set_f <- GTrend_training_set %>%
+           left_join(state_encoded_by_smoothedmean, by = "state") %>%
+           select(-state)
+         
+             
+    #merging smoothed encoded state means with the test_set
+         
+         
+         
+             test_set$state <- factor(test_set$state)
+         
+                test_set_f <- test_set%>%
+                  left_join(state_encoded_by_smoothedmean, by = "state") %>%
+                  select(-state)
+   
 ```
+ 
+
+ 
 
 ```{r}
 dim(test_set_f)
 ```
 
-```{r}
-head(GTrend_training_set_f[,19:26])
-```
 
 
 ```{r }
@@ -274,7 +276,7 @@ test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
 
 GTrend_training_set_f[, -10] <- scale(GTrend_training_set_f[, -10])
 
-head(GTrend_training_set_f[,19:26])
+head(GTrend_training_set_f)
 ```
 
 ```{r}
@@ -292,6 +294,69 @@ codebook <- tibble(
 print(codebook)
 ```
 
+                               INITIAL MODELS BY Njagi
+                               
+          1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
+```{r}
+# DEVELOPING THE MODEL (LR. ENR)
+
+x <- model.matrix(state_mentalhealth_util ~ ., data = GTrend_training_set_f, intercept = FALSE)
+                  
+y <- GTrend_training_set_f$state_mentalhealth_util
+
+    #Performing cross_validation to find the best lambda
+     
+   set.seed(123) # for consistent and replicable results
+   
+   cv_model <- cv.glmnet(x, y, alpha = 0.5, family = "gaussian", nfolds = 5)
+   
+   plot(cv_model) #plotting cross-validation curve
+
+```
+
+```{r}
+#getting the best/ optimal lambda
+
+best_lambda <- cv_model$lambda.min
+best_lambda_1se <- cv_model$lambda.1se
+
+
+  #developing the model using the best lambda
+
+model_min <- glmnet(x, y, alpha = 0.5, lambda = best_lambda, family = "gaussian")
+model_lambda_1se <- glmnet(x, y, alpha = 0.5, lambda = best_lambda_1se, family = "gaussian")
+
+
+#preparing the test set into matrx
+
+x_test <- model.matrix(state_mentalhealth_util ~ ., data = test_set_f, intercept = FALSE)
+y_test <- test_set_f$state_mentalhealth_util
+
+#ensure x and x_test have the same number of columns. its a good practise after using model.matrix
+
+common_columns <- intersect(colnames(x), colnames(x_test))
+x <- x[, common_columns]
+x_test <- x_test[, common_columns]
+
+# use test set to make predictions, use lambda min and lambda_1se
+
+y_pred_min <- predict(model_min, newx = x_test)
+y_pred_1se <- predict(model_lambda_1se, newx = x_test)
+
+#calculate the mean squared error
+
+
+mse_min <- mean((y_test - y_pred_min)^2)
+mse_1se <- mean((y_test - y_pred_1se)^2)
+
+
+print(paste("MSE (MIN):", mse_min))
+
+```
+
+```{r}
+print(paste("MSE (1SE):", mse_1se))
+```
 
 
 
