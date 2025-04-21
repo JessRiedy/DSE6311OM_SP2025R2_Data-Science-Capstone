@@ -21,22 +21,23 @@ library(dplyr)
 library(corrplot)
 library(rvest)
 library(glmnet)
+library(pls)
 ```
 
 
 ```{r }
 #reading data
 
-data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
-
-
-
-acs_data <- load("C:\\data_science\\DSE6311OM_\\Week4_Pre-processing and Feature Engineering\\ACS_for_MHGoogleTrends.Rdata")
+# data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
+# acs_data <- load("C:\\data_science\\DSE6311OM_\\Week4_Pre-processing and Feature Engineering\\ACS_for_MHGoogleTrends.Rdata")
+# Replace with this code to allow quick access regardless of download location
+data_GTrends <- read_excel("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/googleTrendsMH.xlsx", 
+    sheet = "googleTrendsMH")
+acs_data <- load("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/ACS_for_MHGoogleTrends.Rdata")
 
 acs_data <- ACS_data
 ACS_data <- NULL
 ```
- testing GitHub
 
 ```{r}
 ##CORRELATION MATRIX FOR acs_data
@@ -178,11 +179,17 @@ test_n <- (1/sqrt(19))*nrow(clean_GTrends_acs_joined)
   
 ```
 
-```{r}
+```{r write_joined_df_to_file}
+# Show the dimensions of the dataframe and the column names.
 dim(clean_GTrends_acs_joined)
-```
-```{r}
 names(clean_GTrends_acs_joined)
+
+#write the merged dataframe to a CSV file with a time stamp in the  name.
+# This way we don't overwrite the file in case someone else is working on the file.
+# TimeStamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+# file_name <- paste("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/clean_GTrends_acs_joined_", TimeStamp, ".csv")
+# write.csv(clean_GTrends_acs_joined, file_name, row.names = FALSE)
+
 ```
 
 
@@ -358,5 +365,49 @@ print(paste("MSE (MIN):", mse_min))
 print(paste("MSE (1SE):", mse_1se))
 ```
 
+**Principle Component Regression (PCR)**
+```{r principal_component_regression}
+pcr_m_selected <- 1
 
+# Get the PCR fit for the training data set
+pcr_fit <- pcr(state_mentalhealth_util ~ ., data =GTrend_training_set_f , 
+               scale=TRUE, validation="CV")
 
+# Show the summary of the PCR fit.
+summary(pcr_fit)
+
+# Show the validation plot.
+validationplot(pcr_fit, val.type="MSEP")
+
+# Get the predictions
+pcr_preds <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
+
+# Store and print the pcr mean square error for M_selected.
+pcr_mse <- mean((pcr_preds-test_set$state_mentalhealth_util)^2)
+
+paste("PCR MSE for M Selected:",pcr_m_selected,"is", pcr_mse)
+```
+**Partial Least Squares Regression (PLSR)**
+
+```{r parcial_least_squares_regression}
+# Set the PLS M selected value.
+plsr_M_selected <- 15
+
+# Get the PCR fit for the training data set
+plsr_fit <- plsr(state_mentalhealth_util ~ ., data=GTrend_training_set_f , 
+                 scale=TRUE, validation="CV", ncomp=plsr_M_selected)
+
+# print the summary of the partial least square regression fit.
+summary(plsr_fit)
+
+# Show the validation plot
+validationplot(plsr_fit)
+
+# Get the predictions
+plsr_preds <- predict(plsr_fit, data=test_set, ncomp=plsr_M_selected)
+
+# Store and print the MSE value for the PLSR
+plsr_mse <- mean((plsr_preds-test_set$state_mentalhealth_util)^2)
+paste("PLSR MSE for M Selected:",plsr_M_selected,"is", plsr_mse)
+
+```
