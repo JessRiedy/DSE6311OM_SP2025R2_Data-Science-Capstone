@@ -546,6 +546,13 @@ yhat.rf <- predict(rf.data, newdata = test_set_f)
 rf_mse <- mean((yhat.rf-test_set_f$state_mentalhealth_util)^2)
 paste("Test MSE associated with the Random Forest is: =", rf_mse)
 
-importance(rf.data)
+imp <- importance(rf.data)
+# Let's sort the output of the importance() function
+imp_df <- data.frame(Variable = rownames(imp), imp)
+imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
+head(imp_sorted,24)
+
+# Show the importance plot
 varImpPlot(rf.data)
+
 ```
