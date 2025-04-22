@@ -362,7 +362,7 @@ print(codebook)
                                INITIAL MODELS BY Njagi
                                
           1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
-```{r}
+```{r warning=FALSE}
 # DEVELOPING THE MODEL (LR. ENR)
 
 x <- model.matrix(state_mentalhealth_util ~ ., data = GTrend_training_set_f, intercept = FALSE)
@@ -379,7 +379,7 @@ y <- GTrend_training_set_f$state_mentalhealth_util
 
 ```
 
-```{r}
+```{r warning=FALSE}
 #getting the best/ optimal lambda
 
 best_lambda <- cv_model$lambda.min
@@ -423,7 +423,7 @@ print(paste("MSE (MIN):", mse_min))
 print(paste("MSE (1SE):", mse_1se))
 ```
 
-**Principle Component Regression (PCR)**
+**Principal Component Regression (PCR)**
 ```{r principal_component_regression}
 pcr_m_selected <- 1
 
@@ -436,6 +436,16 @@ summary(pcr_fit)
 
 # Show the validation plot.
 validationplot(pcr_fit, val.type="MSEP")
+
+# Plot the residuals vs the fitted values.
+pcr_fitted_vals <- as.vector(fitted(pcr_fit, ncomp=5))
+pcr_residuals <- as.vector(residuals(pcr_fit, ncomp=5))
+plot(pcr_fitted_vals, pcr_residuals,
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "PCR: Residuals vs Fitted")
+abline(h = 0, col = "red", lty = 2)
+
 
 # Get the predictions
 pcr_preds <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
@@ -460,6 +470,15 @@ summary(plsr_fit)
 
 # Show the validation plot
 validationplot(plsr_fit)
+
+# Plot the residuals vs the fitted values.
+plsr_fitted_vals <- as.vector(fitted(plsr_fit, ncomp=5))
+plsr_residuals <- as.vector(residuals(plsr_fit, ncomp=5))
+plot(plsr_fitted_vals, plsr_residuals,
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "PLSR: Residuals vs Fitted")
+abline(h = 0, col = "red", lty = 2)
 
 # Get the predictions
 plsr_preds <- predict(plsr_fit, data=test_set, ncomp=plsr_M_selected)
