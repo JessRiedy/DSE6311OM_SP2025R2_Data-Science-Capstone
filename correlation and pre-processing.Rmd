@@ -1,6 +1,6 @@
 ---
-title: "Pre_processing"
-author: "COLLINS M NJAGI"
+title: "Initial Models Report"
+author: "Team Rho"
 date: "`r Sys.Date()`"
 output:
   pdf_document: default
@@ -11,7 +11,7 @@ output:
 
 
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 #libraries
 
 library(readxl)
@@ -25,7 +25,7 @@ library(pls)
 ```
 
 
-```{r }
+```{r warning=FALSE}
 #reading data
 
 # data_GTrends <- read_excel("C:/data_science/DSE6311OM_/week3_Exploratory Data Analysis/googleTrendsMH.xlsx")
@@ -39,7 +39,7 @@ acs_data <- ACS_data
 ACS_data <- NULL
 ```
 
-```{r}
+```{r warning=FALSE}
 ##CORRELATION MATRIX FOR acs_data
 
 acs_correlation_matrix <- acs_data %>%
@@ -52,7 +52,7 @@ print(acs_correlation_matrix)
 ```
 updated code
 
-```{r}
+```{r warning=FALSE}
 
 #presenting correlation matrix in graphic format
 
@@ -68,7 +68,7 @@ acs_correlation_matrix <- acs_data %>%
 
 ```
 
-```{r}
+```{r warning=FALSE}
 #removing correlated features
 
 
@@ -85,7 +85,7 @@ acs_data_clean$state <- toupper(state.abb[match(tolower(acs_data_clean$state), t
 testing GitHub
 
 
-```{r }
+```{r warning=FALSE}
 #data transformations ct variables
 #creating response variable => state_mentalhealth_utili = state_psych_care / population_est
 
@@ -107,7 +107,7 @@ data_GTrends <- data_GTrends %>%
 ```
   
   
-```{r}
+```{r warning=FALSE}
 #joining both datasets acs_data and data_GTrends
 
 GTrends_acs_joined <- inner_join(data_GTrends, acs_data_clean, by = c("year", "state"))
@@ -115,7 +115,7 @@ GTrends_acs_joined <- inner_join(data_GTrends, acs_data_clean, by = c("year", "s
 ```
 
 
-```{r }
+```{r warning=FALSE}
 #testing correlation
 
 
@@ -144,7 +144,7 @@ high correlation variables
 
  
 
-```{r }
+```{r correlation_matrix, warning=FALSE }
 #correlation matrix
 
 GTrends_acs_joined %>%
@@ -165,21 +165,25 @@ corrplot(diag = F,
 
 
 
-```{r }
+```{r data_split, warning=FALSE}
 #data split: train and test dataset
 
 clean_GTrends_acs_joined <- GTrends_acs_joined %>%
-  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -region, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")), -total_util) #i have added region as part of eliminated feature
+  select(-fips, -population_est,-private_psych_care, -total_util,
+         -outpatient_util, -region, -mean_anxiety, -resid_psych_care, 
+         -mean_all_trends, -mean_therapist_near_me, -depression_prop,
+         -trauma_stress_prop, -inpatient_util, 
+         -contains(c("median", "total")), -total_util) #i have added region as part of eliminated feature
 
 test_n <- (1/sqrt(19))*nrow(clean_GTrends_acs_joined)
-  test_prop <- round((1/sqrt(19))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
-  train_prop <- 1-test_prop
+test_prop <- round((1/sqrt(19))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
+train_prop <- 1-test_prop
   
-  print(paste0("the ideal split ratio is", train_prop, ":", test_prop, "training:testing"))
+paste("The ideal split ratio is", train_prop, ":", test_prop, " training : testing")
   
 ```
 
-```{r write_joined_df_to_file}
+```{r write_joined_df_to_file, warning=FALSE}
 # Show the dimensions of the dataframe and the column names.
 dim(clean_GTrends_acs_joined)
 names(clean_GTrends_acs_joined)
@@ -389,7 +393,7 @@ paste("PCR MSE for M Selected:",pcr_m_selected,"is", pcr_mse)
 ```
 **Partial Least Squares Regression (PLSR)**
 
-```{r parcial_least_squares_regression}
+```{r partial_least_squares_regression}
 # Set the PLS M selected value.
 plsr_M_selected <- 15
 
@@ -411,3 +415,39 @@ plsr_mse <- mean((plsr_preds-test_set$state_mentalhealth_util)^2)
 paste("PLSR MSE for M Selected:",plsr_M_selected,"is", plsr_mse)
 
 ```
+
+**Best Subset Selection**
+```{r subset_selection}
+# Load library needed for regsubsets() function
+library(leaps) 
+
+# The regsubsets() function (part of the leaps library) performs best sub- set selection
+# by identifying the best model that contains a given number of predictors, where best 
+# is quantified using RSS.
+reg_fit_train <- regsubsets(state_mentalhealth_util ~ ., data=GTrend_training_set_f, nvmax=23)
+
+plot(reg_fit_train, scale="r2")
+plot(reg_fit_train, scale="adjr2")
+plot(reg_fit_train, scale="Cp")
+plot(reg_fit_train, scale="bic")
+# The summary() command outputs the best set of variables for each model size.
+reg.summary <- summary(reg_fit_train)
+print(reg.summary)
+names(reg.summary)
+
+#Print the R^2 statistic
+reg.summary$rsq
+
+
+par(mfrow=c(1,2))
+plot(reg.summary$rss, xlab="Number of Variables", ylab="RSS", type="l")
+plot(reg.summary$adjr2 , xlab = "Number of Variables",ylab = "Adjusted RSq", type = "l")
+
+# which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2 , xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], 
+       col = "red", cex = 2, pch = 20)
+
+
+```
+
