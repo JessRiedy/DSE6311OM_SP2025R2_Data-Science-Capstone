@@ -163,7 +163,61 @@ corrplot(diag = F,
 
 ```
 
+```{r visualize_linearrelationships}
+data <- data_GTrends
+data$adhd_prop= data$adhd_ct/data$population_est
+data$anxiety_prop = data$anxiety_ct/data$population_est
+data$bipolar_prop = data$bipolar_ct/data$population_est
+data$depression_prop = data$depression_ct/data$population_est
+data$trauma_prop = data$trauma_stress_ct/data$population_est
+data$state_util = data$state_psych_care/data$population_est
+data$private_util = data$private_psych_care/data$population_est
+data$diff_util = data$total_util-(data$state_util + data$private_util)
 
+boxplot(data[c("adhd_prop", "anxiety_prop", "trauma_prop", "bipolar_prop",  "depression_prop")],
+        main = "Mental Health Diagnosis Proportions",
+        names = c("ADHD", "Anxiety", "Trauma", "Bipolar", "Depression"),
+        col = c("lightblue", "lightgreen", "lightpink", "lightcyan","thistle" ))
+
+par(mfrow=c(1,1))  # divide graph area in 2 columns
+scatter.smooth(x=data$adhd_prop, y=data$state_util, main="adhd_prop ~ state_util")  
+scatter.smooth(x=data$anxiety_prop, y=data$state_util, main="anxiety_prop ~ state_util") 
+scatter.smooth(x=data$trauma_prop, y=data$state_util, main="trauma_prop ~ state_util")
+scatter.smooth(x=data$bipolar_prop, y=data$state_util, main="bipolar_prop ~ state_util")
+scatter.smooth(x=data$depression_prop, y=data$state_util, main="depression_prop ~ state_util")
+
+
+library(e1071)
+par(mfrow=c(1, 1))
+
+# Create a density plot that shows public, private, and total mental healthcare utilization rate
+# frequency
+plot(density(data$state_util), 
+     main = "Public, Private Facility, & Total Utilization Density", 
+     ylab = "Frequency", 
+     xlab = "Utilization Rate",
+     col = "green", 
+     lwd = 2,
+     sub = paste("Skewness (State):", round(e1071::skewness(data$state_util), 2)))
+
+# Fill the first density with polygon
+polygon(density(data$state_util), col = adjustcolor("lightgreen", alpha.f = 0.5), border = NA)
+
+# Add second density line
+lines(density(data$private_util), col = "blue", lwd = 2)
+polygon(density(data$private_util), col = adjustcolor("lightblue", alpha.f = 0.5), border = NA)
+
+# Add third density line
+lines(density(data$total_util), col = "purple", lwd = 2)
+polygon(density(data$total_util), col = adjustcolor("plum", alpha.f = 0.5), border = NA)
+
+# Add legend
+legend("topright", legend = c("Public Utilization", "Private Utilization", "Total Utilization "), 
+       col = c("green", "blue", "purple"), lwd = 1, bty = "n")
+
+
+
+```
 
 ```{r data_split, warning=FALSE}
 #data split: train and test dataset
