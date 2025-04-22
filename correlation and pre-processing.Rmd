@@ -391,7 +391,6 @@ best_lambda_1se <- cv_model$lambda.1se
 model_min <- glmnet(x, y, alpha = 0.5, lambda = best_lambda, family = "gaussian")
 model_lambda_1se <- glmnet(x, y, alpha = 0.5, lambda = best_lambda_1se, family = "gaussian")
 
-
 #preparing the test set into matrx
 
 x_test <- model.matrix(state_mentalhealth_util ~ ., data = test_set_f, intercept = FALSE)
@@ -430,7 +429,8 @@ pcr_m_selected <- 1
 # Get the PCR fit for the training data set
 pcr_fit <- pcr(state_mentalhealth_util ~ ., data =GTrend_training_set_f , 
                scale=TRUE, validation="CV")
-
+# plot the PCR fit
+plot(pcr_fit)
 # Show the summary of the PCR fit.
 summary(pcr_fit)
 
@@ -464,6 +464,9 @@ plsr_M_selected <- 15
 # Get the PCR fit for the training data set
 plsr_fit <- plsr(state_mentalhealth_util ~ ., data=GTrend_training_set_f , 
                  scale=TRUE, validation="CV", ncomp=plsr_M_selected)
+
+# Plot the PLSR fit
+plot(plsr_fit)
 
 # print the summary of the partial least square regression fit.
 summary(plsr_fit)
@@ -523,4 +526,26 @@ points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adj
 
 
 ```
+**Random Forest**
+```{r bagging_and_random_forest, warning=FALSE}
+library(randomForest)
+set.seed(42)
+# Bagging
+bag.data <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f, mtry=24, importance=TRUE)
+bag.data
+yhat.bag <- predict(bag.data, newdata=test_set_f)
+plot(yhat.bag, test_set_f$state_mentalhealth_util)
+abline(0,1)
+bagged_mse <- mean((yhat.bag - test_set_f$state_mentalhealth_util)^2)
+paste ("Test MSE associated with the bagged regression is:", bagged_mse)
 
+# Random Forest
+rf.data <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
+                        mtry = 12, importance = TRUE)
+yhat.rf <- predict(rf.data, newdata = test_set_f)
+rf_mse <- mean((yhat.rf-test_set_f$state_mentalhealth_util)^2)
+paste("Test MSE associated with the Random Forest is: =", rf_mse)
+
+importance(rf.data)
+varImpPlot(rf.data)
+```
