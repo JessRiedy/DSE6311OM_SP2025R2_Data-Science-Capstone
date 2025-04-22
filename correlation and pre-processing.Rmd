@@ -439,7 +439,7 @@ names(reg.summary)
 reg.summary$rsq
 
 
-par(mfrow=c(1,2))
+#par(mfrow=c(1,2))
 plot(reg.summary$rss, xlab="Number of Variables", ylab="RSS", type="l")
 plot(reg.summary$adjr2 , xlab = "Number of Variables",ylab = "Adjusted RSq", type = "l")
 
