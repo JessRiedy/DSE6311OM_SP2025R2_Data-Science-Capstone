@@ -423,7 +423,7 @@ print(paste("MSE (1SE):", mse_1se))
 ```
 
 **Principal Component Regression (PCR)**
-```{r principal_component_regression}
+```{r principal_component_regression, warning=FALSE}
 pcr_m_selected <- 1
 
 # Get the PCR fit for the training data set
@@ -448,16 +448,19 @@ abline(h = 0, col = "red", lty = 2)
 
 
 # Get the predictions
-pcr_preds <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
+pcr_preds_train <- predict(pcr_fit, data=GTrend_training_set_f, ncomp=pcr_m_selected)
+pcr_preds_test <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
 
 # Store and print the pcr mean square error for M_selected.
-pcr_mse <- mean((pcr_preds-test_set$state_mentalhealth_util)^2)
+pcr_train_mse <- mean((pcr_preds_train-GTrend_training_set_f$state_mentalhealth_util)^2)
+pcr_test_mse <- mean((pcr_preds_test-test_set$state_mentalhealth_util)^2)
 
-paste("PCR MSE for M Selected:",pcr_m_selected,"is", pcr_mse)
+paste("PCR Train MSE for M Selected:",pcr_m_selected,"is", pcr_train_mse)
+paste("PCR Test MSE for M Selected:",pcr_m_selected,"is", pcr_test_mse)
 ```
 **Partial Least Squares Regression (PLSR)**
 
-```{r partial_least_squares_regression}
+```{r partial_least_squares_regression, warning=FALSE}
 # Set the PLS M selected value.
 plsr_M_selected <- 15
 
@@ -493,7 +496,7 @@ paste("PLSR MSE for M Selected:",plsr_M_selected,"is", plsr_mse)
 ```
 
 **Best Subset Selection**
-```{r subset_selection}
+```{r subset_selection, warning=FALSE}
 # Load library needed for regsubsets() function
 library(leaps) 
 
@@ -534,6 +537,7 @@ set.seed(42)
 bag.data <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f, mtry=24, importance=TRUE)
 bag.data
 yhat.bag <- predict(bag.data, newdata=test_set_f)
+
 plot(yhat.bag, test_set_f$state_mentalhealth_util)
 abline(0,1)
 bagged_mse <- mean((yhat.bag - test_set_f$state_mentalhealth_util)^2)
@@ -550,7 +554,7 @@ imp <- importance(rf.data)
 # Let's sort the output of the importance() function
 imp_df <- data.frame(Variable = rownames(imp), imp)
 imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
-head(imp_sorted,24)
+head(imp_sorted)
 
 # Show the importance plot
 varImpPlot(rf.data)
