@@ -359,6 +359,26 @@ codebook <- tibble(
 print(codebook)
 ```
 
+```{r Create_Model_RMSE_df, warning=FALSE}
+# Create an empty dataframe with three fields store storing model train and test RMSE values.
+rmse_df <- tibble(
+  Model = character(),      
+  Train_RMSE = numeric(),   
+  Test_RMSE = numeric()   
+)
+
+# Function to add rows to the rmse_df
+add_rmse_row <- function(df, model_name, train_rmse, test_rmse) {
+  new_row <- tibble(
+    Model = model_name,
+    Train_RMSE = train_rmse,
+    Test_RMSE = test_rmse
+  )
+  updated_df <- bind_rows(df, new_row)
+  return(updated_df)
+}
+```
+
                                INITIAL MODELS BY Njagi
                                
           1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
@@ -455,6 +475,9 @@ pcr_preds_test <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
 pcr_train_mse <- mean((pcr_preds_train-GTrend_training_set_f$state_mentalhealth_util)^2)
 pcr_test_mse <- mean((pcr_preds_test-test_set$state_mentalhealth_util)^2)
 
+#add the test and train RMSEs to the rmse_df
+rmse_df <-  add_rmse_row(rmse_df, "Principal Component Regression", pcr_train_mse, pcr_test_mse)
+
 paste("PCR Train MSE for M Selected:",pcr_m_selected,"is", pcr_train_mse)
 paste("PCR Test MSE for M Selected:",pcr_m_selected,"is", pcr_test_mse)
 ```
@@ -493,6 +516,10 @@ plsr_test_preds <- predict(plsr_fit, data=test_set_f, ncomp=plsr_M_selected)
 # Store and print the MSE value for the PLSR
 plsr_train_mse <- mean((plsr_train_preds-GTrend_training_set_f$state_mentalhealth_util)^2)
 plsr_test_mse <- mean((plsr_test_preds-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the rmse_df
+rmse_df <-  add_rmse_row(rmse_df, "Partial Least Squares Regression", plsr_train_mse, plsr_test_mse)
+
 paste("PLSR Train MSE for M Selected:",plsr_M_selected,"is", plsr_train_mse)
 paste("PLSR Test MSE for M Selected:",plsr_M_selected,"is", plsr_test_mse)
 
@@ -555,6 +582,10 @@ yhat_train_rf <- predict(rf_model, newdata = GTrend_training_set_f)
 yhat_test_rf <- predict(rf_model, newdata = test_set_f)
 rf_train_mse <- mean((yhat_train_rf-test_set_f$state_mentalhealth_util)^2)
 rf_test_mse <- mean((yhat_test_rf-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the rmse_df
+rmse_df <- add_rmse_row(rmse_df, "Random Forest", rf_train_mse, rf_test_mse)
+
 paste("Train MSE associated with the Random Forest is: =", rf_train_mse)
 paste("Test MSE associated with the Random Forest is: =", rf_test_mse)
 
@@ -567,7 +598,7 @@ head(imp_sorted)
 # Show the importance plot
 #varImpPlot(rf_model)
 varImpPlot(
-  x = rf_model,    # your trained random forest
+  x = rf_model,    # trained random forest
   sort = TRUE,     # sort by importance
   n.var = 10,      # show top 10 variables
   type = 1,        # mean decrease in accuracy
@@ -597,6 +628,7 @@ print(rf_cv_model)
 # Show validation plot
 plot(rf_cv_model)
 
+names(rf_cv_model)
 # Show RMSE across folds while using na.omit to remove null values before plotting
 boxplot(na.omit(rf_cv_model$resample$RMSE),
         main = "Validation RMSE Across Folds",
@@ -618,4 +650,6 @@ plot(rf_cv_model$finalModel$predicted, residuals,
 abline(h = 0, col = "red")
 
 ```
-
+```{r print_model_mse_df, warning=FALSE}
+rmse_df
+```
