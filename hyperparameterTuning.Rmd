@@ -487,11 +487,14 @@ plot(plsr_fitted_vals, plsr_residuals,
 abline(h = 0, col = "red", lty = 2)
 
 # Get the predictions
-plsr_preds <- predict(plsr_fit, data=test_set, ncomp=plsr_M_selected)
+plsr_train_preds <- predict(plsr_fit, data=GTrend_training_set_f, ncomp=plsr_M_selected)
+plsr_test_preds <- predict(plsr_fit, data=test_set_f, ncomp=plsr_M_selected)
 
 # Store and print the MSE value for the PLSR
-plsr_mse <- mean((plsr_preds-test_set$state_mentalhealth_util)^2)
-paste("PLSR MSE for M Selected:",plsr_M_selected,"is", plsr_mse)
+plsr_train_mse <- mean((plsr_train_preds-GTrend_training_set_f$state_mentalhealth_util)^2)
+plsr_test_mse <- mean((plsr_test_preds-test_set_f$state_mentalhealth_util)^2)
+paste("PLSR Train MSE for M Selected:",plsr_M_selected,"is", plsr_train_mse)
+paste("PLSR Test MSE for M Selected:",plsr_M_selected,"is", plsr_test_mse)
 
 ```
 
@@ -544,22 +547,32 @@ bagged_mse <- mean((yhat.bag - test_set_f$state_mentalhealth_util)^2)
 paste ("Test MSE associated with the bagged regression is:", bagged_mse)
 
 # Random Forest
-rf.data <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
+rf_model <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
                         mtry = 12, importance = TRUE)
-print(rf.data)
+print(rf_model)
 
-yhat.rf <- predict(rf.data, newdata = test_set_f)
-rf_mse <- mean((yhat.rf-test_set_f$state_mentalhealth_util)^2)
-paste("Test MSE associated with the Random Forest is: =", rf_mse)
+yhat_train_rf <- predict(rf_model, newdata = GTrend_training_set_f)
+yhat_test_rf <- predict(rf_model, newdata = test_set_f)
+rf_train_mse <- mean((yhat_train_rf-test_set_f$state_mentalhealth_util)^2)
+rf_test_mse <- mean((yhat_test_rf-test_set_f$state_mentalhealth_util)^2)
+paste("Train MSE associated with the Random Forest is: =", rf_train_mse)
+paste("Test MSE associated with the Random Forest is: =", rf_test_mse)
 
-imp <- importance(rf.data)
+imp <- importance(rf_model)
 # Let's sort the output of the importance() function
 imp_df <- data.frame(Variable = rownames(imp), imp)
 imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
 head(imp_sorted)
 
 # Show the importance plot
-varImpPlot(rf.data)
+#varImpPlot(rf_model)
+varImpPlot(
+  x = rf_model,    # your trained random forest
+  sort = TRUE,     # sort by importance
+  n.var = 10,      # show top 10 variables
+  type = 1,        # mean decrease in accuracy
+  main = "Top 10 Important Variables"
+)
 
 ```
 ```{r random_forest_kfold_valiation, warning=FALSE}
