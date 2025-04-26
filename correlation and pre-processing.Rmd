@@ -98,8 +98,8 @@ data_GTrends <- data_GTrends %>%
          bipolar_prop = bipolar_ct/population_est,
          depression_prop = depression_ct/population_est)
 
-#data_GTrends <- data_GTrends %>% 
-  #select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct) all these feature already removed!
+data_GTrends <- data_GTrends %>% 
+  select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct) #all these feature already removed
 
 
 
@@ -296,7 +296,45 @@ print(codebook)
 
                                INITIAL MODELS BY Njagi
                                
-          1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
+         1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION - UNSUPERVISED) DID NOT WORK!!! 
+
+```{r}
+
+
+x_unsp <- GTrend_training_set_f%>%
+  select(-state_mentalhealth_util)
+
+
+y_unsp <- GTrend_training_set_f$state_mentalhealth_util
+
+set.seed(123)
+
+#elasticnet_unsp <- glmnet(x_unsp, y_unsp, family = "gaussian", alpha = 0.5, intercept = FALSE)
+
+ cv_en_unsup <- cv.glmnet(x_unsp, y_unsp, family = "gaussian", alpha = 0.5, intercept = FALSE)
+ 
+#get the coefficient
+
+#coef_elasticnet_unsp <- coef(elasticnet_unsp)
+ 
+ coef_cv_en_unsup <- coef(cv_en_unsup, s = "best_lambda_1se")
+
+#select the non-zero features
+
+important_features <- which(coef_elasticnet_unsp != 0)
+
+print(paste("important_features:", paste(rownames(coef_elasticnet_unsp)[important_features], collapse = ", ")))
+
+```
+
+                               
+                               
+                               
+                               
+                               
+                               
+                               
+          2. LINEAR REGRESSION (ELASTIC NET REGULARIZATION - SUPERVISED)                     
 ```{r}
 # DEVELOPING THE MODEL (LR. ENR)
 
@@ -358,5 +396,52 @@ print(paste("MSE (MIN):", mse_min))
 print(paste("MSE (1SE):", mse_1se))
 ```
 
+               feature importance
 
+```{r}
+coef_model_min <- coef(model_min, s= best_lambda)
+
+print(coef_model_min)
+
+```
+
+
+```{r}
+coef_model_1se <- coef(cv_model, s=cv_model$lambda.1se)
+
+print(coef_model_1se)
+```
+
+
+```{r}
+cv_model$lambda.min
+
+which.min(cv_model$cvm)
+```
+
+               Testing for linearity assumption
+
+```{r}
+y_pred_min_train <- predict(model_min, newx = x)
+y_pred_1se_train <- predict(model_lambda_1se, newx = x)
+
+residuals_min <- y - y_pred_min_train
+residuals_1se <- y - y_pred_min_train
+
+
+#plot
+
+plot(y_pred_min_train, residuals_min,
+     main = "Residuals vs Fitted Values for model_min",
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+
+```{r}
+
+plot(y_pred_min_train, residuals_1se,
+     main = "Residuals vs Fitted Values for model_lamda_1se",
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")
+```
 
