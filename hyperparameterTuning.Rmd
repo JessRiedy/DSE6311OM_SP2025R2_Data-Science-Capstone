@@ -650,6 +650,23 @@ plot(rf_cv_model$finalModel$predicted, residuals,
 abline(h = 0, col = "red")
 
 ```
+<<<<<<< Updated upstream
 ```{r print_model_mse_df, warning=FALSE}
 rmse_df
 ```
+=======
+
+
+**Mean Square Error**
+```{r mean_sqr_error, warning=FALSE}
+mse <- data.frame(Model = c('Linear Regression (Elastic Net Regularization) - 1SE', 'Linear Regression (Elastic Net Regularization) - MIN', 'Principal Component Regression (PCR) - Test', 'Partial Least Squares Regression (PLSR)', 'Bagged Regression', 'Random Forest'), `MeanSquareError(MSE)` = c(mse_1se, mse_min, pcr_test_mse, plsr_test_mse, bagged_mse, rf_test_mse))
+
+mse
+
+ggplot(mse, aes(x = reorder(Model, MeanSquareError.MSE.), y = MeanSquareError.MSE.)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Mean Square Errors (MSE) of Each Model", x = "Model", y = "Mean Square Error") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+>>>>>>> Stashed changes
