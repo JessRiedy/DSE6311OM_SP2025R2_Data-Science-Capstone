@@ -334,7 +334,7 @@ print(paste("important_features:", paste(rownames(coef_elasticnet_unsp)[importan
                                
                                
                                
-          2. LINEAR REGRESSION (ELASTIC NET REGULARIZATION - SUPERVISED)                     
+          2. LINEAR REGRESSION (ELASTIC NET REGULARIZATION - SUPERVISED) by Njagi                   
 ```{r}
 # DEVELOPING THE MODEL (LR. ENR)
 
@@ -364,8 +364,17 @@ best_lambda_1se <- cv_model$lambda.1se
 model_min <- glmnet(x, y, alpha = 0.5, lambda = best_lambda, family = "gaussian")
 model_lambda_1se <- glmnet(x, y, alpha = 0.5, lambda = best_lambda_1se, family = "gaussian")
 
+#predictions on training dataset
 
-#preparing the test set into matrx
+y_pred_min_train <- predict(model_min, newx = x)
+y_pred_1se_train <- predict(model_lambda_1se, newx = x)
+
+#calculating MSE of training set
+
+mse_min_train <- mean((y - y_pred_min_train)^2)
+mse_1se_train <- mean((y - y_pred_1se_train)^2)
+
+#preparing the test set into matrix
 
 x_test <- model.matrix(state_mentalhealth_util ~ ., data = test_set_f, intercept = FALSE)
 y_test <- test_set_f$state_mentalhealth_util
@@ -395,8 +404,20 @@ print(paste("MSE (MIN):", mse_min))
 ```{r}
 print(paste("MSE (1SE):", mse_1se))
 ```
+```{r}
+mse_min_train
+```
+```{r}
+mse_1se_train
+```
+```{r}
+ mse_min > mse_min_train # overfitting
+```
+```{r}
+ mse_1se > mse_1se_train #overfitting
+```
 
-               feature importance
+               feature importance by Njagi
 
 ```{r}
 coef_model_min <- coef(model_min, s= best_lambda)
@@ -419,7 +440,7 @@ cv_model$lambda.min
 which.min(cv_model$cvm)
 ```
 
-               Testing for linearity assumption
+               Testing for linearity assumption by Njagi
 
 ```{r}
 y_pred_min_train <- predict(model_min, newx = x)
@@ -443,5 +464,104 @@ plot(y_pred_min_train, residuals_1se,
      main = "Residuals vs Fitted Values for model_lamda_1se",
      xlab = "Fitted Values", ylab = "Residuals")
 abline(h = 0, col = "red")
+```
+
+            HYPERPARAMETER TUNING (ALPHA). 
+            
+    Since we arleady have the best lambda (lambda.mi and lambda.1se, we are going to focus on alpha to get the best possible model
+
+```{r}
+set.seed(123)
+
+train_control <- trainControl(method = "cv",
+                              number = 5,
+                              savePredictions = "final",
+                              classProbs = FALSE)
+
+#creating the range for alpha to be tuned
+
+grid <- expand.grid(alpha = seq(0, 1, by = 0.1), lambda = c(best_lambda, best_lambda_1se))
+
+
+#performing grid search
+
+model_alpha <- caret::train(state_mentalhealth_util ~ .,
+                     data = GTrend_training_set_f,
+                     method = "glmnet",
+                     tuneGrid = grid,
+                     trControl = train_control)
+
+#getting the best alpha hyper-parameter
+
+best_alpha <- model_alpha$bestTune$alpha
+
+#training the final model with the best tuned alpha and labda.min (best_lambda)
+
+model_alpha_min <- glmnet(x, y, alpha = best_alpha, lambda = best_lambda, family = "gaussian")
+
+model_alpha_1se <- glmnet(x, y, alpha = best_alpha, lambda = best_lambda_1se, family = "gaussian")
+
+#predict on training data
+
+y_pred_alpa_min_train <- predict(model_alpha_min, newx = x)
+
+y_pred_alpha_1se_train <- predict(model_alpha_1se, newx = x) 
+
+     mse_alpha_min_train <- mean((y - y_pred_alpa_min_train)^2)
+     mse_alpha_1se_train <- mean((y - y_pred_alpha_1se_train)^2)
+
+
+#predict on test data
+
+y_pred_alpa_min <- predict(model_alpha_min, newx = x_test)
+
+y_pred_alpha_1se <- predict(model_alpha_1se, newx = x_test) 
+
+#checking the new mse of tuned alpha
+
+
+mse_alpha_min <- mean((y_test - y_pred_alpa_min)^2)
+mse_alpha_1se <- mean((y_test - y_pred_alpha_1se)^2)
+
+```
+```{r}
+mse_alpha_min
+```
+
+```{r}
+mse_alpha_1se
+```
+
+         plot of the mse values for tuned alpha, lambda.min and lambda.1se
+         
+```{r}
+mse_values <- data.frame(Model = c("model_min", "model_1se", "model_alpha_min", "model_alpha_1se"),
+                         MSE = c("mse_min", "mse_1se", "mse_alpha_min", "mse_alpha_1se"))
+
+ggplot(mse_values, aes(x = Model, y = MSE, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Comparison of MSE Values in Elastic Net Regularization",
+       subtitle = "Tuned Alpha vs Lambda Min and Lambda 1se",
+       x = "Model",
+       y = "Mean Squared Error (MSE)") +
+  theme_classic() +
+  theme(legend.position = "none") 
+  
+```
+         
+         
+         testing model overfitting after tunning
+  
+```{r}
+mse_alpha_min_train
+mse_alpha_min
+mse_alpha_min > mse_alpha_min_train
+```
+         
+
+```{r}
+mse_alpha_1se_train
+mse_alpha_1se
+mse_alpha_1se > mse_alpha_1se_train
 ```
 
