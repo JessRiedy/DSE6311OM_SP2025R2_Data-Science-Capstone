@@ -224,7 +224,8 @@ legend("topright", legend = c("Public Utilization", "Private Utilization", "Tota
 
 clean_GTrends_acs_joined <- GTrends_acs_joined %>%
   select(-fips, -population_est,-private_psych_care, -total_util,
-         -outpatient_util, -region, -mean_anxiety, -resid_psych_care, 
+         -outpatient_util, -region, -mean_anxiety, -resid_psych_care,
+         #-outpatient_util, -mean_anxiety, -resid_psych_care,
          -mean_all_trends, -mean_therapist_near_me, -depression_prop,
          -trauma_stress_prop, -inpatient_util, 
          -contains(c("median", "total")), -total_util) #i have added region as part of eliminated feature
@@ -240,6 +241,17 @@ paste("The ideal split ratio is", train_prop, ":", test_prop, " training : testi
 ```{r write_joined_df_to_file, warning=FALSE}
 # Show the dimensions of the dataframe and the column names.
 dim(clean_GTrends_acs_joined)
+names(clean_GTrends_acs_joined)
+
+# Remove some fields used in the calculation of the proportions
+cols_to_exclude = c("anxiety_ct",
+                    "trauma_stress_ct",
+                    "adhd_ct","bipolar_ct",
+                    "depression_ct",
+                    "comm_psych_care",
+                    "state_psych_care")
+clean_GTrends_acs_joined <- clean_GTrends_acs_joined[,!(names(clean_GTrends_acs_joined)
+                                                        %in% cols_to_exclude)]
 names(clean_GTrends_acs_joined)
 
 #write the merged dataframe to a CSV file with a time stamp in the  name.
@@ -332,10 +344,14 @@ dim(test_set_f)
 ```{r }
 #center and scale
 
+# test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
+#                            center = apply(GTrend_training_set_f[, c(-10)], 2, mean),
+#                            scale = apply(GTrend_training_set_f[, c(-10)], 2, sd)) 
+
+state_util_index <- 
 test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
                            center = apply(GTrend_training_set_f[, c(-10)], 2, mean),
                            scale = apply(GTrend_training_set_f[, c(-10)], 2, sd)) 
-
 #(-10) is the state_mentalhealth_util, i want to exclude it from center and scale since its already a proportion. Am not sure if this is the best idea at the moment!
                                           
 
@@ -357,22 +373,23 @@ codebook <- tibble(
 )
 
 print(codebook)
+codebook$variable
 ```
 
-```{r Create_Model_RMSE_df, warning=FALSE}
+```{r Create_Model_mse_df, warning=FALSE}
 # Create an empty dataframe with three fields store storing model train and test RMSE values.
-rmse_df <- tibble(
+mse_df <- tibble(
   Model = character(),      
-  Train_RMSE = numeric(),   
-  Test_RMSE = numeric()   
+  Train_MSE = numeric(),   
+  Test_MSE = numeric()   
 )
 
-# Function to add rows to the rmse_df
-add_rmse_row <- function(df, model_name, train_rmse, test_rmse) {
+# Function to add rows to the mse_df
+add_rmse_row <- function(df, model_name, train_mse, test_mse) {
   new_row <- tibble(
     Model = model_name,
-    Train_RMSE = train_rmse,
-    Test_RMSE = test_rmse
+    Train_MSE = train_mse,
+    Test_MSE = test_mse
   )
   updated_df <- bind_rows(df, new_row)
   return(updated_df)
@@ -475,8 +492,8 @@ pcr_preds_test <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
 pcr_train_mse <- mean((pcr_preds_train-GTrend_training_set_f$state_mentalhealth_util)^2)
 pcr_test_mse <- mean((pcr_preds_test-test_set$state_mentalhealth_util)^2)
 
-#add the test and train RMSEs to the rmse_df
-rmse_df <-  add_rmse_row(rmse_df, "Principal Component Regression", pcr_train_mse, pcr_test_mse)
+#add the test and train RMSEs to the mse_df
+mse_df <-  add_rmse_row(mse_df, "Principal Component Regression", pcr_train_mse, pcr_test_mse)
 
 paste("PCR Train MSE for M Selected:",pcr_m_selected,"is", pcr_train_mse)
 paste("PCR Test MSE for M Selected:",pcr_m_selected,"is", pcr_test_mse)
@@ -517,8 +534,8 @@ plsr_test_preds <- predict(plsr_fit, data=test_set_f, ncomp=plsr_M_selected)
 plsr_train_mse <- mean((plsr_train_preds-GTrend_training_set_f$state_mentalhealth_util)^2)
 plsr_test_mse <- mean((plsr_test_preds-test_set_f$state_mentalhealth_util)^2)
 
-#add the test and train RMSEs to the rmse_df
-rmse_df <-  add_rmse_row(rmse_df, "Partial Least Squares Regression", plsr_train_mse, plsr_test_mse)
+#add the test and train RMSEs to the mse_df
+mse_df <-  add_rmse_row(mse_df, "Partial Least Squares Regression", plsr_train_mse, plsr_test_mse)
 
 paste("PLSR Train MSE for M Selected:",plsr_M_selected,"is", plsr_train_mse)
 paste("PLSR Test MSE for M Selected:",plsr_M_selected,"is", plsr_test_mse)
@@ -583,8 +600,8 @@ yhat_test_rf <- predict(rf_model, newdata = test_set_f)
 rf_train_mse <- mean((yhat_train_rf-test_set_f$state_mentalhealth_util)^2)
 rf_test_mse <- mean((yhat_test_rf-test_set_f$state_mentalhealth_util)^2)
 
-#add the test and train RMSEs to the rmse_df
-rmse_df <- add_rmse_row(rmse_df, "Random Forest", rf_train_mse, rf_test_mse)
+#add the test and train RMSEs to the mse_df
+mse_df <- add_rmse_row(mse_df, "Random Forest", rf_train_mse, rf_test_mse)
 
 paste("Train MSE associated with the Random Forest is: =", rf_train_mse)
 paste("Test MSE associated with the Random Forest is: =", rf_test_mse)
@@ -651,5 +668,7 @@ abline(h = 0, col = "red")
 
 ```
 ```{r print_model_mse_df, warning=FALSE}
-rmse_df
+mse_df
+
+names(GTrend_training_set_f)
 ```
