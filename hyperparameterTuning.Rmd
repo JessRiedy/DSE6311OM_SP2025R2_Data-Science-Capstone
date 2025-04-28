@@ -672,3 +672,37 @@ mse_df
 
 names(GTrend_training_set_f)
 ```
+**Tune MRTRY Hyperparameter to 10 from 12***
+```{r Tune_mtry_to_10, warning=FALSE}
+# Random Forest with MTRY=10
+rf_model_mtry_10 <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
+                        mtry = 10, importance = TRUE)
+print(rf_model_mtry_10)
+
+yhat_train_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = GTrend_training_set_f)
+yhat_test_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = test_set_f)
+rf_train_mse_mtry_10 <- mean((yhat_train_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
+rf_test_mse_mtry_10 <- mean((yhat_test_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the mse_df
+mse_df <- add_rmse_row(mse_df, "Random Forest -MTRY=10", rf_train_mse_mtry_10, rf_test_mse_mtry_10)
+
+paste("Train MSE associated with the Random Forest is: =", rf_train_mse_mtry_10)
+paste("Test MSE associated with the Random Forest is: =", rf_test_mse_mtry_10)
+
+imp <- importance(rf_model_mtry_10)
+# Let's sort the output of the importance() function
+imp_df <- data.frame(Variable = rownames(imp), imp)
+imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
+head(imp_sorted)
+
+# Show the importance plot
+#varImpPlot(rf_model)
+varImpPlot(
+  x = rf_model_mtry_10,    # trained random forest
+  sort = TRUE,     # sort by importance
+  n.var = 10,      # show top 10 variables
+  type = 1,        # mean decrease in accuracy
+  main = "Top 10 Important Variables"
+)
+```
