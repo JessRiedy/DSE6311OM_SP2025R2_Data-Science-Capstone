@@ -387,6 +387,10 @@ add_rmse_row <- function(df, model_name, train_mse, test_mse) {
 
 ```
 
+```{r remove_state_encoded, warning=FALSE}
+GTrend_training_set_f<- subset(GTrend_training_set_f, select = -state_encoded)
+test_set_f <- subset(test_set_f, select = -state_encoded)
+```
                                INITIAL MODELS BY Njagi
                                
           1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
@@ -570,14 +574,18 @@ bagged_mse <- mean((yhat.bag - test_set_f$state_mentalhealth_util)^2)
 paste ("Test MSE associated with the bagged regression is:", bagged_mse)
 
 # Random Forest
-rf_model <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
-                        mtry = 12, importance = TRUE)
+rf_model <- randomForest(state_mentalhealth_util ~ .,
+                         data=GTrend_training_set_f,
+                         mtry = 12,
+                         importance = TRUE)
 print(rf_model)
 
 yhat_train_rf <- predict(rf_model, newdata = GTrend_training_set_f)
 yhat_test_rf <- predict(rf_model, newdata = test_set_f)
-rf_train_mse <- mean((yhat_train_rf-test_set_f$state_mentalhealth_util)^2)
-rf_test_mse <- mean((yhat_test_rf-test_set_f$state_mentalhealth_util)^2)
+
+# Calculate the train and test mean square errors
+rf_train_mse <- mean((yhat_train_rf - GTrend_training_set_f$state_mentalhealth_util)^2)
+rf_test_mse <- mean((yhat_test_rf - test_set_f$state_mentalhealth_util)^2)
 
 #add the test and train RMSEs to the mse_df
 mse_df <- add_rmse_row(mse_df, "Random Forest", rf_train_mse, rf_test_mse)
@@ -652,16 +660,21 @@ mse_df
 names(GTrend_training_set_f)
 ```
 **Tune MRTRY Hyperparameter to 10 from 12***
+Let's do some hyperparameter tuning. We have the opportunity to reset the mtry value from 12 to 10 here, calculate and collect the MSE for comparison with other MSE values from the other models. We can also tune the number tree using some specific values. 
 ```{r Tune_mtry_to_10, warning=FALSE}
+
 # Random Forest with MTRY=10
-rf_model_mtry_10 <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
-                        mtry = 10, importance = TRUE)
+rf_model_mtry_10 <- randomForest(state_mentalhealth_util ~ ., 
+                                 data=GTrend_training_set_f,
+                                 mtry = 10, importance = TRUE)
 print(rf_model_mtry_10)
 
 yhat_train_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = GTrend_training_set_f)
 yhat_test_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = test_set_f)
-rf_train_mse_mtry_10 <- mean((yhat_train_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
-rf_test_mse_mtry_10 <- mean((yhat_test_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
+
+# Calculate the test and train mean square errors
+rf_train_mse_mtry_10 <- mean((yhat_train_rf_mtry_10 - GTrend_training_set_f$state_mentalhealth_util)^2)
+rf_test_mse_mtry_10 <- mean((yhat_test_rf_mtry_10 - test_set_f$state_mentalhealth_util)^2)
 
 #add the test and train RMSEs to the mse_df
 mse_df <- add_rmse_row(mse_df, "Random Forest -MTRY=10", rf_train_mse_mtry_10, rf_test_mse_mtry_10)
