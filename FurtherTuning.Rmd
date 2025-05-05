@@ -1,0 +1,729 @@
+---
+title: "Further Analysis and Tuning"
+author: "Team Rho"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library_calls, warning=FALSE, message=FALSE}
+#libraries
+
+library(readxl)
+library(caret)
+library(tidyr)
+library(dplyr)
+library(corrplot)
+library(rvest)
+library(glmnet)
+library(pls)
+library(fastDummies)
+library(randomForest)
+library(janitor)
+```
+
+```{r Load_Data, warning=FALSE}
+#reading data
+data_GTrends <- read_excel("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/googleTrendsMH.xlsx", 
+    sheet = "googleTrendsMH")
+acs_data <- load("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/ACS_for_MHGoogleTrends.Rdata")
+
+acs_data <- ACS_data
+ACS_data <- NULL
+```
+
+
+```{r correlation_matrix_for_ACS_data, warning=FALSE}
+##CORRELATION MATRIX FOR acs_data
+
+acs_correlation_matrix <- acs_data %>%
+  select_if(is.numeric) %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability) %>%
+  cor()
+
+print(acs_correlation_matrix)
+
+```
+
+```{r show_correlation_matrix, warning=FALSE}
+#presenting correlation matrix in graphic format
+
+acs_correlation_matrix <- acs_data %>%
+  select_if(is.numeric) %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability) %>%
+  cor() %>%
+  corrplot( diag = F,
+           tl.cex = 0.7,
+           tl.col = "black",
+           main = "acs_data correlation matrix",
+           mar = c(0,0,1,0))
+
+```
+
+```{r remove_correlated_features, warning=FALSE}
+#removing correlated features
+acs_data_clean <- acs_data %>%
+  select(-prop_persons_below_poverty_threshold, -prop_veterans_disability)
+# convert state names into abbreviation to match state in data_GTrends
+
+acs_data_clean$state <- toupper(state.abb[match(tolower(acs_data_clean$state), tolower(state.name))])
+
+```
+
+```{r creating_reponse_variable, warning=FALSE}
+#data transformations ct variables
+#creating response variable => state_mentalhealth_utili = state_psych_care / population_est
+#state_mentalhealth_utili <- data_GTrends$state_psych_care / data_GTrends$population_est
+
+data_GTrends <- data_GTrends %>%
+  mutate(state_mentalhealth_util = state_psych_care/population_est,
+         anxiety_prop = anxiety_ct/ population_est,
+         trauma_stress_prop = trauma_stress_ct/population_est,
+         adhd_prop = adhd_ct/population_est,
+         bipolar_prop = bipolar_ct/population_est,
+         depression_prop = depression_ct/population_est)
+
+#data_GTrends <- data_GTrends %>% 
+  #select(-state_psych_care, -anxiety_ct, -trauma_stress_ct, -adhd_ct, -bipolar_ct, -depression_ct) all these feature already removed!
+
+```
+  
+```{r joning_datasets, warning=FALSE}
+#joining both datasets acs_data and data_GTrends
+
+GTrends_acs_joined <- inner_join(data_GTrends, acs_data_clean, by = c("year", "state"))
+
+```
+
+
+```{r testing_correlation, warning=FALSE}
+#testing correlation
+
+correlation_matrix <- GTrends_acs_joined %>%
+  select_if(is.numeric) %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -trauma_stress_prop, -depression_prop, -inpatient_util, -contains(c("median", "total")),
+         -total_util) %>%
+cor() 
+
+print(correlation_matrix)
+
+```
+
+high correlation variables 
+
+1. private, reside and comm_psych_care,
+2. inpatient_util vs outpatient_util ( i already have state_mentalhealth_util)
+3. mean_therapist near_me vs mean_psychiatrist and mean_psychologist
+4. mean_alltrend vs mean_adhd, mean_ptsd, mean_anxiety, mean_mentalhospital.
+5. mean_anxiety vs year, mean_adhd & ptsd
+6. outpatient_util vs total_util, adhd, bipolar & depression
+7. total_util
+8. depression prob vs adhd. ptsd, bipolar and trauma_stress_prop
+9. trauma_stress_prop vs adhd, anxiety_prop and state_mentalhealth_util
+10.state_mentalhealth_util vs adhd, ptsd, bipolar
+
+```{r correlation_matrix, warning=FALSE }
+#correlation matrix
+
+GTrends_acs_joined %>%
+  select_if(is.numeric) %>%
+  select(-fips, -population_est,-private_psych_care, -total_util, -outpatient_util, -mean_anxiety, -resid_psych_care, -mean_all_trends, -mean_therapist_near_me, -state_mentalhealth_util, -depression_prop, -trauma_stress_prop, -inpatient_util, -contains(c("median", "total")),
+         -total_util) %>%
+  cor() %>%
+
+corrplot(diag = F,
+         tl.cex = 0.7,
+         tl.col = "black",
+         main = "Correlation Matrix of GTrends_acs_joined",
+         mar = c(0, 0, 1, 0))
+
+```
+```{r visualize_linear_relationships}
+data <- data_GTrends
+data$adhd_prop= data$adhd_ct/data$population_est
+data$anxiety_prop = data$anxiety_ct/data$population_est
+data$bipolar_prop = data$bipolar_ct/data$population_est
+data$depression_prop = data$depression_ct/data$population_est
+data$trauma_prop = data$trauma_stress_ct/data$population_est
+data$state_util = data$state_psych_care/data$population_est
+data$private_util = data$private_psych_care/data$population_est
+data$diff_util = data$total_util-(data$state_util + data$private_util)
+
+boxplot(data[c("adhd_prop", "anxiety_prop", "trauma_prop", "bipolar_prop",  "depression_prop")],
+        main = "Mental Health Diagnosis Proportions",
+        names = c("ADHD", "Anxiety", "Trauma", "Bipolar", "Depression"),
+        col = c("lightblue", "lightgreen", "lightpink", "lightcyan","thistle" ))
+
+par(mfrow=c(1,1))  # divide graph area in 2 columns
+scatter.smooth(x=data$adhd_prop, y=data$state_util, main="adhd_prop ~ state_util")  
+scatter.smooth(x=data$anxiety_prop, y=data$state_util, main="anxiety_prop ~ state_util") 
+scatter.smooth(x=data$trauma_prop, y=data$state_util, main="trauma_prop ~ state_util")
+scatter.smooth(x=data$bipolar_prop, y=data$state_util, main="bipolar_prop ~ state_util")
+scatter.smooth(x=data$depression_prop, y=data$state_util, main="depression_prop ~ state_util")
+
+
+library(e1071)
+par(mfrow=c(1, 1))
+
+# Create a density plot that shows public, private, and total mental healthcare utilization rate
+# frequency
+plot(density(data$state_util), 
+     main = "Public, Private Facility, & Total Utilization Density", 
+     ylab = "Frequency", 
+     xlab = "Utilization Rate",
+     col = "green", 
+     lwd = 2,
+     sub = paste("Skewness (State):", round(e1071::skewness(data$state_util), 2)))
+
+# Fill the first density with polygon
+polygon(density(data$state_util), col = adjustcolor("lightgreen", alpha.f = 0.5), border = NA)
+
+# Add second density line
+lines(density(data$private_util), col = "blue", lwd = 2)
+polygon(density(data$private_util), col = adjustcolor("lightblue", alpha.f = 0.5), border = NA)
+
+# Add third density line
+lines(density(data$total_util), col = "purple", lwd = 2)
+polygon(density(data$total_util), col = adjustcolor("plum", alpha.f = 0.5), border = NA)
+
+# Add legend
+legend("topright", legend = c("Public Utilization", "Private Utilization", "Total Utilization "), 
+       col = c("green", "blue", "purple"), lwd = 1, bty = "n")
+
+
+
+```
+
+```{r data_split, warning=FALSE}
+#data split: train and test dataset
+
+clean_GTrends_acs_joined <- GTrends_acs_joined %>%
+  select(-fips, -population_est,-private_psych_care, -total_util,
+         # Comment the next line out and replace it to include region
+         #-outpatient_util, -region, -mean_anxiety, -resid_psych_care,
+         -outpatient_util, -mean_anxiety, -resid_psych_care, 
+         -mean_all_trends, -mean_therapist_near_me, -depression_prop,
+         -trauma_stress_prop, -inpatient_util, 
+         -contains(c("median", "total")), -total_util) #i have added region as part of eliminated feature
+
+test_n <- (1/sqrt(19))*nrow(clean_GTrends_acs_joined)
+test_prop <- round((1/sqrt(19))*nrow(clean_GTrends_acs_joined)/nrow(clean_GTrends_acs_joined), 2)
+train_prop <- 1-test_prop
+  
+paste("The ideal split ratio is", train_prop, ":", test_prop, " training : testing")
+  
+```
+
+```{r write_joined_df_to_file, warning=FALSE}
+# Show the dimensions of the dataframe and the column names.
+dim(clean_GTrends_acs_joined)
+names(clean_GTrends_acs_joined)
+
+# Remove some fields used in the calculation of the proportions
+cols_to_exclude = c("anxiety_ct",
+                    "trauma_stress_ct",
+                    "adhd_ct","bipolar_ct",
+                    "depression_ct",
+                    "comm_psych_care",
+                    "state_psych_care")
+clean_GTrends_acs_joined <- clean_GTrends_acs_joined[,!(names(clean_GTrends_acs_joined)
+                                                        %in% cols_to_exclude)]
+names(clean_GTrends_acs_joined)
+
+#write the merged dataframe to a CSV file with a time stamp in the  name.
+# This way we don't overwrite the file in case someone else is working on the file.
+# TimeStamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+# file_name <- paste("~/GitHub/DSE6311OM_SP2025R2_Data-Science-Capstone/Data/clean_GTrends_acs_joined_", TimeStamp, ".csv")
+# write.csv(clean_GTrends_acs_joined, file_name, row.names = FALSE)
+
+```
+
+
+
+```{r split_the_data, warning=FALSE}
+
+train <- createDataPartition(clean_GTrends_acs_joined$state_mentalhealth_util,
+                             p = 0.77,
+                             list = FALSE,
+                             times = 1)
+
+
+GTrend_training_set <- clean_GTrends_acs_joined[train, ] 
+
+
+test_set <- clean_GTrends_acs_joined[-train, ] 
+ 
+dim(GTrend_training_set)
+dim(test_set)
+head(test_set)
+```
+```{r hot_encode_region, warning=FALSE}
+
+## One-hot encoding using fastDummies
+train_encoded <- dummy_cols(GTrend_training_set,
+                            select_columns = "region",
+                            remove_first_dummy = FALSE, ## TRUE for true dummy encoding
+                            remove_selected_columns = TRUE) ## Drops original columns
+
+# Sanitize column names by replacing spaces in column names with underscores
+train_encoded <- clean_names(train_encoded)
+
+## Repeat to make test_encoded!
+test_encoded <- dummy_cols(test_set,
+                            select_columns = "region",
+                            remove_first_dummy = FALSE, ## TRUE for true dummy encoding
+                            remove_selected_columns = TRUE) ## Drops original columns
+
+# Sanitize column names by replacing spaces in column names with underscores
+test_encoded <- clean_names(test_encoded)
+
+## Align test set with training set columns (IF NEEDED)
+missingFeatures <- setdiff(names(train_encoded), names(test_encoded))
+
+test_encoded[missingFeatures] <- 0
+test_encoded <- test_encoded[, names(train_encoded)]
+names(test_encoded)
+
+
+# Assign the encoded training set and test set
+GTrend_training_set <- train_encoded
+test_set <- test_encoded
+```
+
+
+ TARGET ENCODING OF STATE BY Njagi
+ 
+```{r target_encoding_state, warning=FALSE}
+
+unique(clean_GTrends_acs_joined$state)
+is.factor(clean_GTrends_acs_joined$state) #checking whether region is a factor = false
+
+GTrend_training_set$state <- factor(GTrend_training_set$state)
+
+class(GTrend_training_set$state) 
+levels(GTrend_training_set$state)
+
+# we are going to apply target encoding (state_mentalhealth_util). To avoid overfitting we are going to introduce a
+#smoothed version of target encoding
+
+main_mean <- mean(GTrend_training_set$state_mentalhealth_util)
+
+smoothing_factor <- 10 
+  
+#calculating the smoothed state means from the training set
+state_encoded_by_smoothedmean <- GTrend_training_set %>%
+  group_by(state) %>%
+  summarise(state_encoded = (mean(state_mentalhealth_util) * n() + main_mean * smoothing_factor) / (n() + smoothing_factor))
+   
+#merging the smoothed encoded state means with the training set
+          
+GTrend_training_set_f <- GTrend_training_set %>%
+  left_join(state_encoded_by_smoothedmean, by = "state") %>% 
+  select(-state)
+         
+             
+#merging smoothed encoded state means with the test_set
+test_set$state <- factor(test_set$state)
+         
+test_set_f <- test_set%>%
+  left_join(state_encoded_by_smoothedmean, by = "state") %>%
+  select(-state)
+   
+names(GTrend_training_set_f)
+```
+```{r center_and_scale, warning=FALSE}
+
+state_util_index <- 10
+test_set_f[, c(-10)] <- scale(test_set_f[, c(-10)],
+                           center = apply(GTrend_training_set_f[, c(-10)], 2, mean),
+                           scale = apply(GTrend_training_set_f[, c(-10)], 2, sd)) 
+#(-10) is the state_mentalhealth_util, i want to exclude it from center and scale since its already a proportion. Am not sure if this is the best idea at the moment!
+                                          
+
+GTrend_training_set_f[, -10] <- scale(GTrend_training_set_f[, -10])
+
+head(GTrend_training_set_f)
+```
+
+```{r generate_codebook, warning=FALSE}
+#generating codebook
+
+library(tibble)
+
+codebook <- tibble(
+  variable = names(clean_GTrends_acs_joined),
+  class = sapply(clean_GTrends_acs_joined, class),
+  "Number of Missing Values" = sapply(clean_GTrends_acs_joined, function(x) sum(is.na(x))),
+  "Number of Unique Values" = sapply(clean_GTrends_acs_joined, function(x) length(unique(x)))
+)
+
+print(codebook)
+codebook$variable
+```
+
+```{r Create_Model_mse_df, warning=FALSE}
+# Create an empty dataframe with three fields store storing model train and test RMSE values.
+mse_df <- tibble(
+  Model = character(),      
+  Train_MSE = numeric(),   
+  Test_MSE = numeric()   
+)
+
+# Function to add rows to the mse_df
+add_rmse_row <- function(df, model_name, train_mse, test_mse) {
+  new_row <- tibble(
+    Model = model_name,
+    Train_MSE = train_mse,
+    Test_MSE = test_mse
+  )
+  updated_df <- bind_rows(df, new_row)
+  return(updated_df)
+}
+
+```
+
+                               INITIAL MODELS BY Njagi
+                               
+          1. LINEAR REGRESSION (ELASTIC NET REGULARIZATION)                     
+```{r elastic_net_regularization, warning=FALSE}
+# DEVELOPING THE MODEL (LR. ENR)
+
+x <- model.matrix(state_mentalhealth_util ~ ., data = GTrend_training_set_f, intercept = FALSE)
+                  
+y <- GTrend_training_set_f$state_mentalhealth_util
+
+#Performing cross_validation to find the best lambda
+     
+set.seed(123) # for consistent and replicable results
+   
+cv_model <- cv.glmnet(x, y, alpha = 0.5, family = "gaussian", nfolds = 5)
+   
+plot(cv_model) #plotting cross-validation curve
+
+```
+```{r mse_best_lambda, warning=FALSE}
+#getting the best/ optimal lambda
+best_lambda <- cv_model$lambda.min
+best_lambda_1se <- cv_model$lambda.1se
+
+
+#developing the model using the best lambda
+model_min <- glmnet(x, y, alpha = 0.5, lambda = best_lambda, family = "gaussian")
+model_lambda_1se <- glmnet(x, y, alpha = 0.5, lambda = best_lambda_1se, family = "gaussian")
+
+#preparing the test set into matrix
+x_test <- model.matrix(state_mentalhealth_util ~ ., data = test_set_f, intercept = FALSE)
+y_test <- test_set_f$state_mentalhealth_util
+
+#ensure x and x_test have the same number of columns. its a good practise after using model.matrix
+common_columns <- intersect(colnames(x), colnames(x_test))
+x <- x[, common_columns]
+x_test <- x_test[, common_columns]
+
+# use test set to make predictions, use lambda min and lambda_1se
+y_pred_min <- predict(model_min, newx = x_test)
+y_pred_1se <- predict(model_lambda_1se, newx = x_test)
+
+#calculate the mean squared error
+mse_min <- mean((y_test - y_pred_min)^2)
+mse_1se <- mean((y_test - y_pred_1se)^2)
+
+
+print(paste("MSE (MIN):", mse_min))
+print(paste("MSE (1SE):", mse_1se))
+
+```
+
+**Principal Component Regression (PCR)**
+```{r principal_component_regression, warning=FALSE}
+pcr_m_selected <- 1
+
+# Get the PCR fit for the training data set
+pcr_fit <- pcr(state_mentalhealth_util ~ ., data =GTrend_training_set_f , 
+               scale=TRUE, validation="CV")
+# plot the PCR fit
+plot(pcr_fit)
+# Show the summary of the PCR fit.
+summary(pcr_fit)
+
+# Show the validation plot.
+validationplot(pcr_fit, val.type="MSEP")
+
+# Plot the residuals vs the fitted values.
+pcr_fitted_vals <- as.vector(fitted(pcr_fit, ncomp=5))
+pcr_residuals <- as.vector(residuals(pcr_fit, ncomp=5))
+plot(pcr_fitted_vals, pcr_residuals,
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "PCR: Residuals vs Fitted")
+abline(h = 0, col = "red", lty = 2)
+
+
+# Get the predictions
+pcr_preds_train <- predict(pcr_fit, data=GTrend_training_set_f, ncomp=pcr_m_selected)
+pcr_preds_test <- predict(pcr_fit, data=test_set, ncomp=pcr_m_selected)
+
+# Store and print the pcr mean square error for M_selected.
+pcr_train_mse <- mean((pcr_preds_train-GTrend_training_set_f$state_mentalhealth_util)^2)
+pcr_test_mse <- mean((pcr_preds_test-test_set$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the mse_df
+mse_df <-  add_rmse_row(mse_df, "Principal Component Regression", pcr_train_mse, pcr_test_mse)
+
+paste("PCR Train MSE for M Selected:",pcr_m_selected,"is", pcr_train_mse)
+paste("PCR Test MSE for M Selected:",pcr_m_selected,"is", pcr_test_mse)
+```
+**Partial Least Squares Regression (PLSR)**
+
+```{r partial_least_squares_regression, warning=FALSE}
+# Set the PLS M selected value.
+plsr_M_selected <- 15
+
+# Get the PCR fit for the training data set
+plsr_fit <- plsr(state_mentalhealth_util ~ ., data=GTrend_training_set_f , 
+                 scale=TRUE, validation="CV", ncomp=plsr_M_selected)
+
+# Plot the PLSR fit
+plot(plsr_fit)
+
+# print the summary of the partial least square regression fit.
+summary(plsr_fit)
+
+# Show the validation plot
+validationplot(plsr_fit)
+
+# Plot the residuals vs the fitted values.
+plsr_fitted_vals <- as.vector(fitted(plsr_fit, ncomp=5))
+plsr_residuals <- as.vector(residuals(plsr_fit, ncomp=5))
+plot(plsr_fitted_vals, plsr_residuals,
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "PLSR: Residuals vs Fitted")
+abline(h = 0, col = "red", lty = 2)
+
+# Get the predictions
+plsr_train_preds <- predict(plsr_fit, data=GTrend_training_set_f, ncomp=plsr_M_selected)
+plsr_test_preds <- predict(plsr_fit, data=test_set_f, ncomp=plsr_M_selected)
+
+# Store and print the MSE value for the PLSR
+plsr_train_mse <- mean((plsr_train_preds-GTrend_training_set_f$state_mentalhealth_util)^2)
+plsr_test_mse <- mean((plsr_test_preds-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the mse_df
+mse_df <-  add_rmse_row(mse_df, "Partial Least Squares Regression", plsr_train_mse, plsr_test_mse)
+
+paste("PLSR Train MSE for M Selected:",plsr_M_selected,"is", plsr_train_mse)
+paste("PLSR Test MSE for M Selected:",plsr_M_selected,"is", plsr_test_mse)
+
+```
+**Best Subset Selection**
+```{r subset_selection, warning=FALSE}
+# Load library needed for regsubsets() function
+library(leaps) 
+
+# The regsubsets() function (part of the leaps library) performs best sub- set selection
+# by identifying the best model that contains a given number of predictors, where best 
+# is quantified using RSS.
+reg_fit_train <- regsubsets(state_mentalhealth_util ~ ., data=GTrend_training_set_f, nvmax=23)
+
+# plot(reg_fit_train, scale="r2")
+# plot(reg_fit_train, scale="adjr2")
+# plot(reg_fit_train, scale="Cp")
+# plot(reg_fit_train, scale="bic")
+# The summary() command outputs the best set of variables for each model size.
+reg.summary <- summary(reg_fit_train)
+#print(reg.summary)
+names(reg.summary)
+
+#Print the R^2 statistic
+reg.summary$rsq
+
+
+#par(mfrow=c(1,2))
+plot(reg.summary$rss, xlab="Number of Variables", ylab="RSS", type="l")
+plot(reg.summary$adjr2 , xlab = "Number of Variables",ylab = "Adjusted RSq", type = "l")
+
+# which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2 , xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], 
+       col = "red", cex = 2, pch = 20)
+
+names(GTrend_training_set_f)
+```
+**Random Forest**
+```{r bagging_and_random_forest, warning=FALSE}
+library(randomForest)
+set.seed(42)
+# Bagging
+bag.data <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f, mtry=24, importance=TRUE)
+bag.data
+yhat.bag <- predict(bag.data, newdata=test_set_f)
+
+plot(yhat.bag, test_set_f$state_mentalhealth_util)
+abline(0,1)
+bagged_mse <- mean((yhat.bag - test_set_f$state_mentalhealth_util)^2)
+paste ("Test MSE associated with the bagged regression is:", bagged_mse)
+
+# Random Forest
+rf_model <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
+                        mtry = 12, importance = TRUE)
+print(rf_model)
+
+yhat_train_rf <- predict(rf_model, newdata = GTrend_training_set_f)
+yhat_test_rf <- predict(rf_model, newdata = test_set_f)
+rf_train_mse <- mean((yhat_train_rf-test_set_f$state_mentalhealth_util)^2)
+rf_test_mse <- mean((yhat_test_rf-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the mse_df
+mse_df <- add_rmse_row(mse_df, "Random Forest", rf_train_mse, rf_test_mse)
+
+paste("Train MSE associated with the Random Forest is: =", rf_train_mse)
+paste("Test MSE associated with the Random Forest is: =", rf_test_mse)
+
+imp <- importance(rf_model)
+# Let's sort the output of the importance() function
+imp_df <- data.frame(Variable = rownames(imp), imp)
+imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
+head(imp_sorted)
+
+# Show the importance plot
+#varImpPlot(rf_model)
+varImpPlot(
+  x = rf_model,    # trained random forest
+  sort = TRUE,     # sort by importance
+  n.var = 10,      # show top 10 variables
+  type = 1,        # mean decrease in accuracy
+  main = "Top 10 Important Variables"
+)
+
+```
+```{r random_forest_kfold_valiation, warning=FALSE}
+set.seed(42)
+
+# Set up a 5 fold cross-vlidation for the random forest model.
+rf_control <- trainControl(method="cv", number=5)
+
+# Define the tuning grid with values for mtry at 8, 10, 12, or 14.
+tune_grid <- expand.grid(.mtry = c(6, 8, 10, 12, 14, 16, 18))
+
+# Train the random forest model using k-fold cross validation
+rf_cv_model <- train(state_mentalhealth_util ~ ., 
+                     data = GTrend_training_set_f,
+                     method = "rf",
+                     trControl = rf_control,
+                     tuneGrid = tune_grid,
+                     importance = TRUE)
+# Print the results
+print(rf_cv_model)
+
+# Show validation plot
+plot(rf_cv_model)
+
+names(rf_cv_model)
+# Show RMSE across folds while using na.omit to remove null values before plotting
+boxplot(na.omit(rf_cv_model$resample$RMSE),
+        main = "Validation RMSE Across Folds",
+        ylab = "RMSE")
+# Show R squared across folds with na.omit() as above.
+boxplot(na.omit(rf_cv_model$resample$Rsquared),
+        main = "Validation R-squared Across Folds",
+        ylab = "R-squared")
+
+# Show the residuals plot
+# Residuals
+residuals <- rf_cv_model$finalModel$y - rf_cv_model$finalModel$predicted
+ 
+# Plot residuals vs fitted
+plot(rf_cv_model$finalModel$predicted, residuals,
+      xlab = "Predicted Values",
+      ylab = "Residuals",
+      main = "Residuals vs Predicted")
+abline(h = 0, col = "red")
+
+```
+```{r print_model_mse_df, warning=FALSE}
+mse_df
+
+names(GTrend_training_set_f)
+```
+**Tune MRTRY Hyperparameter to 10 from 12***
+```{r Tune_mtry_to_10, warning=FALSE}
+# Random Forest with MTRY=10
+rf_model_mtry_10 <- randomForest(state_mentalhealth_util ~ ., data=GTrend_training_set_f ,
+                        mtry = 10, importance = TRUE)
+print(rf_model_mtry_10)
+
+yhat_train_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = GTrend_training_set_f)
+yhat_test_rf_mtry_10 <- predict(rf_model_mtry_10, newdata = test_set_f)
+rf_train_mse_mtry_10 <- mean((yhat_train_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
+rf_test_mse_mtry_10 <- mean((yhat_test_rf_mtry_10-test_set_f$state_mentalhealth_util)^2)
+
+#add the test and train RMSEs to the mse_df
+mse_df <- add_rmse_row(mse_df, "Random Forest -MTRY=10", rf_train_mse_mtry_10, rf_test_mse_mtry_10)
+
+paste("Train MSE associated with the Random Forest is: =", rf_train_mse_mtry_10)
+paste("Test MSE associated with the Random Forest is: =", rf_test_mse_mtry_10)
+
+imp <- importance(rf_model_mtry_10)
+# Let's sort the output of the importance() function
+imp_df <- data.frame(Variable = rownames(imp), imp)
+imp_sorted <- imp_df[order(-imp_df$X.IncMSE), ]
+head(imp_sorted)
+
+# Show the importance plot
+#varImpPlot(rf_model)
+varImpPlot(
+  x = rf_model_mtry_10,    # trained random forest
+  sort = TRUE,     # sort by importance
+  n.var = 10,      # show top 10 variables
+  type = 1,        # mean decrease in accuracy
+  main = "Top 10 Important Variables"
+)
+
+print(mse_df)
+```
+```{r tune_rf_model_trees, warning=FALSE}
+
+set.seed(42)
+
+rf_data <- GTrend_training_set_f[, c(-10)]
+rf_label <- GTrend_training_set_f$state_mentalhealth_util
+
+ntree_grid <- c(50, 100, 200, 500, 1000)
+control <- trainControl(method = "cv", number = 5)
+
+results <- data.frame(ntree = integer(), Accuracy = numeric())
+
+for (nt in ntree_grid) {
+  set.seed(12)
+  rf_model <- train(x = rf_data,
+    y = rf_label,
+    method = "rf",
+    metric = "RMSE",
+    tuneGrid = expand.grid(mtry = sqrt(ncol(rf_data))),
+    trControl = control,
+    ntree = nt
+  )
+
+  results <- rbind(results, data.frame(ntree = nt, RMSE = min(rf_model$results$RMSE)))
+}
+
+print(results)
+
+best_ntree <- results$ntree[which.min(results$RMSE)]
+paste("Best number of trees:", best_ntree)
+
+plot(
+  results$ntree, results$RMSE,
+  type = "b",
+  xlab = "Number of Trees",
+  ylab = "RMSE",
+  main = "Random Forest Tuning: Number of Trees vs RMSE",
+  pch = 19
+)
+```
